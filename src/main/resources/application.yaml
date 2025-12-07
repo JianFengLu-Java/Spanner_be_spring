@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/spanner
+    username: postgres
+    password: Lujianfeng
+  application:
+    name: Spanner
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: update
+  servlet:
+    multipart:
+      max-file-size: 100MB
+server:
+  port: 8080
+
+
+minio:
+  endpoint: http://localhost:9000
+  accessKey: root
+  secretKey: Lujianfeng123
+  bucketName: pic
+
+
