@@ -1,35 +1,35 @@
 package com.lujianfeng.spanner.controller;
 
-import com.lujianfeng.spanner.config.SecurityConfiguration;
 import com.lujianfeng.spanner.dto.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.UserRegisterRequestDTO;
-import com.lujianfeng.spanner.entity.UserEntity;
-import com.lujianfeng.spanner.mapper.UserMapper;
-import com.lujianfeng.spanner.security.SecurityUser;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.UserVO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-
-import java.net.Authenticator;
 import java.util.Map;
 
 /**
- *用户控制器
+ * 用户控制器
+ * 获取前端发送的用户请求
  */
+
+
+//注册为Rest请求
 @RestController
+//根路径
 @RequestMapping("/user")
+
+
 public class UserController {
 
     private final UserService userService;
-
+    //构造方法注入Bean
     public UserController(UserService userService) {
         this.userService = userService;
     }
 
+    //用户注册
     @PostMapping("/register")
     public ResponseEntity<Map<String,Object>> register(@RequestBody UserRegisterRequestDTO userRegisterRequestDTO) {
        try{
@@ -48,6 +48,7 @@ public class UserController {
 
     }
 
+    //用户登录
     @PostMapping("/login")
     public  ResponseEntity<Map<String,Object>> login(@RequestBody UserLoginRequestDTO userLoginRequestDTO) {
         try{
@@ -64,6 +65,7 @@ public class UserController {
 
     }
 
+    //获取用户信息
     @GetMapping("/me")
     public ResponseEntity<Map<String,Object>> me(){
         UserVO user = userService.getUserInfo();

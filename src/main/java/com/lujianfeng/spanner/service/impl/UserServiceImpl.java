@@ -36,9 +36,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserVO register(UserRegisterRequestDTO userRegisterRequestDTO) {
+        //UserEntity是用户实体类，保存了所有的用户信息
         UserEntity userEntity = userMapper.toUserEntity(userRegisterRequestDTO);
         userEntity.setPassword(bCryptPasswordEncoder.encode(userRegisterRequestDTO.getPassword()));
-
         UserEntity user = userRepository.save(userEntity);
         return userMapper.toUserVO(user);
     }
@@ -74,7 +74,7 @@ public class UserServiceImpl implements UserService {
 
             String token = jwtUtil.generateToken(userName);
             return Map.of(
-                    "message","user login OK",
+                    "message","登录成功，保存Token",
                     "status",true,
                     "token",token
             );
