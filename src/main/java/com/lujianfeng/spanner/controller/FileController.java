@@ -2,7 +2,6 @@ package com.lujianfeng.spanner.controller;
 
 import com.lujianfeng.spanner.service.service.FileService;
 import io.minio.MinioClient;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +13,6 @@ import java.util.Map;
  * 文件上传
  */
 
-@Slf4j
 @RestController
 @RequestMapping("/files")
 public class FileController {
@@ -35,7 +33,6 @@ public class FileController {
     public ResponseEntity<Map<String,Object>> updata(@RequestParam("fileData") MultipartFile file) {
         try{
             String fileUrl =  fileService.upload(file);
-            log.info(fileUrl);
             return ResponseEntity.ok(
                     Map.of(
                             "status","success",
@@ -43,7 +40,8 @@ public class FileController {
                     )
             );
         }catch(Exception e){
-            log.error(e.getMessage());
+
+
         }
         return ResponseEntity.ok(
                     Map.of(

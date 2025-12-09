@@ -1,51 +1,25 @@
-package com.lujianfeng.spanner.entity;
-import jakarta.persistence.*;
+package com.lujianfeng.spanner.dto;
 
-/**
- * 用户实体类
- */
+import org.springframework.stereotype.Component;
 
-@Entity
-@Table(name = "user_info_test")
-public class UserEntity {
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
-    @Column(unique = true, nullable = false)
+
+@Component
+public class UserRegisterRequestDTO {
     private String userName;
-    @Column
+
     private String password;
-    @Column
+
     private String avatarUrl;
-    @Column
+
     private String gender;
-    @Column
+
     private String email;
-    @Column
+
     private String phone;
-    @Column
+
     private String address;
-    @Column
+
     private Long age;
-    @Column(nullable = false)
-    private String role = "user";
-
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
 
     public String getUserName() {
         return userName;

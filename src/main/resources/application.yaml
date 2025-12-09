@@ -3,7 +3,7 @@ spring:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5432/spanner
     username: postgres
-    password: Lujianfeng
+    password: Lujianfeng123
   application:
     name: Spanner
   jpa:
@@ -12,11 +12,10 @@ spring:
       ddl-auto: update
   servlet:
     multipart:
-      max-file-size: 100MB
+      max-file-size: 300MB
+      max-request-size: 300MB
 server:
   port: 8080
-
-
 minio:
   endpoint: http://localhost:9000
   accessKey: root

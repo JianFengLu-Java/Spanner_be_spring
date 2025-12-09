@@ -1,14 +1,20 @@
 package com.lujianfeng.spanner.controller;
 
-import com.lujianfeng.spanner.dto.UserDTO;
+import com.lujianfeng.spanner.config.SecurityConfiguration;
+import com.lujianfeng.spanner.dto.UserLoginRequestDTO;
+import com.lujianfeng.spanner.dto.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.entity.UserEntity;
+import com.lujianfeng.spanner.mapper.UserMapper;
+import com.lujianfeng.spanner.security.SecurityUser;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.UserVO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.Authenticator;
 import java.util.Map;
 
 /**
@@ -25,9 +31,9 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Map<String,Object>> register(@RequestBody UserDTO userDTO) {
+    public ResponseEntity<Map<String,Object>> register(@RequestBody UserRegisterRequestDTO userRegisterRequestDTO) {
        try{
-           UserVO userInfo = userService.register(userDTO);
+           UserVO userInfo = userService.register(userRegisterRequestDTO);
            return ResponseEntity.ok(
                    Map.of(
                            "code",200,
@@ -43,9 +49,9 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public  ResponseEntity<Map<String,Object>> login(@RequestBody UserDTO userDTO) {
+    public  ResponseEntity<Map<String,Object>> login(@RequestBody UserLoginRequestDTO userLoginRequestDTO) {
         try{
-            Map<String,Object> result = userService.login(userDTO);
+            Map<String,Object> result = userService.login(userLoginRequestDTO);
             if (result.get("status").equals(true)) {
                 return ResponseEntity.ok(result);
             }
@@ -56,6 +62,12 @@ public class UserController {
 
 
 
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<Map<String,Object>> me(){
+        UserVO user = userService.getUserInfo();
+        return ResponseEntity.ok(Map.of("user",user));
     }
 
 

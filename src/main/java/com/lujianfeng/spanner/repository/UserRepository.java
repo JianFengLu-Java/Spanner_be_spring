@@ -10,7 +10,6 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
-    @NotNull UserEntity save(@NotNull UserEntity userEntity);
-
+    UserEntity save(@NotNull UserEntity userEntity);
     UserEntity findByUserName(String userName);
 }
