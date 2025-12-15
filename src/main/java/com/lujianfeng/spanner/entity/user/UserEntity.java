@@ -1,8 +1,17 @@
-package com.lujianfeng.spanner.entity;
+package com.lujianfeng.spanner.entity.user;
+
 import jakarta.persistence.*;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 用户实体类
+ *
+ * @author Lujianfeng
+ * @version 1.0
+ * @date 2025/12/15
+ * @since 1.0
  */
 
 @Entity
@@ -27,16 +36,21 @@ public class UserEntity {
     private String address;
     @Column
     private Long age;
-    @Column(nullable = false)
-    private String role = "user";
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "user_role",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<RoleEntity> roles = new HashSet<RoleEntity>();
 
-    public String getRole() {
-        return role;
+    public Set<RoleEntity> getRoles() {
+        return roles;
     }
 
-    public void setRole(String role) {
-        this.role = role;
+    public void setRoles(Set<RoleEntity> roles) {
+        this.roles = roles;
     }
 
     public Long getId() {

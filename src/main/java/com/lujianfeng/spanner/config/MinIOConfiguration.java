@@ -2,11 +2,20 @@ package com.lujianfeng.spanner.config;
 
 import com.lujianfeng.spanner.prop.MinIOProperties;
 import io.minio.BucketExistsArgs;
-import io.minio.MakeBucketArgs; // 引入 MakeBucketArgs
+import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+/**
+ * MinIO Container configuration class
+ *
+ * @author Lujianfeng
+ * @version 1.0
+ * @date 2025/12/15
+ * @since 1.0
+ */
 
 @Configuration
 public class MinIOConfiguration {
@@ -19,34 +28,39 @@ public class MinIOConfiguration {
 
     @Bean
     public MinioClient minioClient() {
-        MinioClient minioClient = null; // 在 try 块外部声明
+        MinioClient minioClient = null;
         String bucketName = minioProperties.getBucketName();
 
         try {
-            // 1. 创建 MinioClient 实例
+            //Create MinioClient instance
+            //Chained calls
             minioClient = new MinioClient.Builder()
+                    //MinIO server endpoint
                     .endpoint(minioProperties.getEndpoint())
+                    //AccessKey and SecretKey
                     .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
+                    //Create Minio Client Object
                     .build();
 
-            // 2. 检查 Bucket 是否存在
+            //Check if the bucket exists
             boolean exists = minioClient.bucketExists(
                     BucketExistsArgs.builder().bucket(bucketName).build()
             );
 
-            // 3. 如果 Bucket 不存在，则创建它
+            //If the bucket don't exist,create it.
             if (!exists) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
                 System.out.println("MinIO Bucket created successfully: " + bucketName);
             }
 
-            return minioClient; // 成功返回 Client
+            // Return MinIO Client Object.
+            return minioClient;
 
         } catch (Exception e) {
-            // 4. 失败处理：抛出运行时异常，阻止应用启动，并暴露配置错误
+            //Failure handling:throw runtime exception,stop application launching,and exposed error
             System.err.println("MinIO Client initialization failed for bucket: " + bucketName);
             System.err.println("Error details: " + e.getMessage());
-            // 抛出运行时异常，确保 Spring 容器无法完成加载
+            //Throw runtime exception,make sure Spring container can't finish loading.
             throw new RuntimeException("MinIO Client configuration failed.", e);
         }
     }

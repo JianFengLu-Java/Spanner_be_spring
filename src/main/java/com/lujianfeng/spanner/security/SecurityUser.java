@@ -1,22 +1,20 @@
 package com.lujianfeng.spanner.security;
 
-import com.lujianfeng.spanner.entity.UserEntity;
+import com.lujianfeng.spanner.entity.user.PermissionEntity;
+import com.lujianfeng.spanner.entity.user.RoleEntity;
+import com.lujianfeng.spanner.entity.user.UserEntity;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 
-public class SecurityUser implements UserDetails {
-    private final UserEntity userEntity;
-
-    public SecurityUser(UserEntity userEntity) {
-        this.userEntity = userEntity;
-    }
-
+public record SecurityUser(UserEntity userEntity) implements UserDetails {
 
     @Override
     public boolean isAccountNonExpired() {
@@ -39,8 +37,22 @@ public class SecurityUser implements UserDetails {
     }
 
     @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(userEntity.getRole()));
+    public @NonNull Collection<? extends GrantedAuthority> getAuthorities() {
+        Set<GrantedAuthority> authorities = new HashSet<>();
+
+        // 遍历用户所有角色
+        for (RoleEntity role : userEntity.getRoles()) {
+
+            // 添加角色
+            authorities.add(new SimpleGrantedAuthority(role.getRoleName()));
+
+            // 如果角色有权限，再添加权限（可选）
+            for (PermissionEntity perm : role.getPermissions()) {
+                authorities.add(new SimpleGrantedAuthority(perm.getPermission()));
+            }
+        }
+
+        return authorities;
     }
 
     @Override
@@ -49,11 +61,7 @@ public class SecurityUser implements UserDetails {
     }
 
     @Override
-    public String getUsername() {
+    public @NonNull String getUsername() {
         return userEntity.getUserName();
-    }
-
-    public UserEntity getUserEntity() {
-        return userEntity;
     }
 }
