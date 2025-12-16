@@ -55,4 +55,24 @@ public class FileController {
                 )
         );
     }
+
+    @PostMapping("/update/avatar")
+    public ResponseEntity<Map<String, Object>> updateAvatar(@RequestParam("file") MultipartFile file) {
+        try {
+            String fileUrl = fileService.upload(file);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "status", "success",
+                            "fileUrl", fileUrl
+                    )
+            );
+        } catch (Exception e) {
+
+        }
+        return ResponseEntity.ok(
+                Map.of(
+                        "message", "error"
+                )
+        );
+    }
 }
