@@ -3,6 +3,17 @@ package com.lujianfeng.spanner.prop;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ *
+ * MinIO Server Properties
+ *
+ * @author lujianfeng
+ * @date 2025-12-15 23:28
+ * @version 1.0
+ * @description get prop from application.yaml
+ *
+ */
+
 @Component
 @ConfigurationProperties(prefix = "minio")
 

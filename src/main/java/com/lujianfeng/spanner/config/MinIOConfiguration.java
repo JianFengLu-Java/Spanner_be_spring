@@ -35,9 +35,9 @@ public class MinIOConfiguration {
             //Create MinioClient instance
             //Chained calls
             minioClient = new MinioClient.Builder()
-                    //MinIO server endpoint
+                    //Set MinIO server endpoint
                     .endpoint(minioProperties.getEndpoint())
-                    //AccessKey and SecretKey
+                    //Set AccessKey and SecretKey
                     .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
                     //Create Minio Client Object
                     .build();
