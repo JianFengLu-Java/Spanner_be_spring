@@ -1,4 +1,4 @@
-package com.lujianfeng.spanner.vo;
+package com.lujianfeng.spanner.vo.user;
 
 import org.springframework.stereotype.Component;
 

@@ -8,24 +8,27 @@ import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.security.SecurityUser;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.util.JwtUtil;
-import com.lujianfeng.spanner.vo.UserVO;
+import com.lujianfeng.spanner.vo.user.LoginVO;
+import com.lujianfeng.spanner.vo.user.UserVO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-
 @Service
 public class UserServiceImpl implements UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(UserServiceImpl.class);
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final JwtUtil jwtUtil;
 
 
-    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper, BCryptPasswordEncoder bCryptPasswordEncoder, JwtUtil jwtUtil) {
+    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper, BCryptPasswordEncoder bCryptPasswordEncoder,
+                           JwtUtil jwtUtil) {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.userMapper = userMapper;
@@ -56,32 +59,30 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Map<String, Object> login(UserLoginRequestDTO userLoginRequestDTO) {
+    public LoginVO login(UserLoginRequestDTO userLoginRequestDTO) {
         String userName = userLoginRequestDTO.getUserName();
-        System.out.println(userName);
+        log.info(userName);
         UserEntity user = userRepository.findByUserName(userName);
         if (user == null) {
-            return Map.of(
-                    "message", "用户不存在",
-                    "status", false,
-                    "token", "null"
-            );
+            return LoginVO.builder()
+                    .code(401L)
+                    .token(null)
+                    .message("用户不存在")
+                    .build();
         }
         boolean isPass = bCryptPasswordEncoder.matches(userLoginRequestDTO.getPassword(), user.getPassword());
         if (isPass) {
 
             String token = jwtUtil.generateToken(userName);
-            return Map.of(
-                    "message", "登录成功，保存Token",
-                    "status", true,
-                    "token", token
-            );
+            return LoginVO.builder()
+                    .code(200L)
+                    .token(token)
+                    .message("登录成功！")
+                    .build();
+
         } else {
-            return Map.of(
-                    "message", "user login FAIL",
-                    "status", false,
-                    "token", "null"
-            );
+            return LoginVO.builder()
+                    .token(null).code(403L).message("密码错误").build();
         }
 
 

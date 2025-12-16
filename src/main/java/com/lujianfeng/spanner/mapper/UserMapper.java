@@ -2,7 +2,7 @@ package com.lujianfeng.spanner.mapper;
 
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
-import com.lujianfeng.spanner.vo.UserVO;
+import com.lujianfeng.spanner.vo.user.UserVO;
 import org.mapstruct.Mapper;
 
 /**

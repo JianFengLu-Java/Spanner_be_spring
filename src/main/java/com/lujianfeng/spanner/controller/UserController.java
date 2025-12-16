@@ -3,7 +3,8 @@ package com.lujianfeng.spanner.controller;
 import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.service.service.UserService;
-import com.lujianfeng.spanner.vo.UserVO;
+import com.lujianfeng.spanner.vo.user.LoginVO;
+import com.lujianfeng.spanner.vo.user.UserVO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,20 +53,23 @@ public class UserController {
 
     }
 
-    //User login
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody UserLoginRequestDTO userLoginRequestDTO) {
+    public ResponseEntity<LoginVO> login(@RequestBody UserLoginRequestDTO dto) {
         try {
-            Map<String, Object> result = userService.login(userLoginRequestDTO);
-            if (result.get("status").equals(true)) {
+            LoginVO result = userService.login(dto);
+
+            if (result.getCode() == 200L) {
                 return ResponseEntity.ok(result);
             }
-            return ResponseEntity.status(HttpStatus.FOUND).body(result);
+
+            // 登录失败，返回 401 Unauthorized
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "error"));
+            // 服务器异常
+            LoginVO error = LoginVO.builder().token(null).code(500L).message("服务器内部错误").build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
-
-
     }
 
     //Get user information
