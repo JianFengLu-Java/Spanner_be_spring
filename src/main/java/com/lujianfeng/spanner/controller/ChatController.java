@@ -26,6 +26,8 @@ public class ChatController {
 
         log.info("Received the MessageDTO{}", message);
         log.info("Received the Message Content:{}", message.getContent());
+        String content = message.getContent();
+        message.setContent("Server Return:" + content);
 
         return message;
     }

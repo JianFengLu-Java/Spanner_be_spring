@@ -12,11 +12,19 @@ import java.io.InputStream;
 import java.util.UUID;
 
 
+/**
+ * @author Lujianfeng
+ * @version 1.0
+ * @date 2025/12/16
+ * @since 1.0
+ */
+
 @Service
 public class FileServiceImpl implements FileService {
 
     private final MinIOProperties minioProperties;
     private final MinioClient minioClient;
+
     public FileServiceImpl(@Autowired MinioClient minioClient,
                            @Autowired MinIOProperties minioProperties) {
         this.minioClient = minioClient;
@@ -28,29 +36,25 @@ public class FileServiceImpl implements FileService {
     public String upload(MultipartFile file) {
         String fileName = file.getOriginalFilename();
         String suffixName = fileName != null && fileName.contains(".") ? fileName.substring(fileName.lastIndexOf(".")) : "";
-        String objectName =  UUID.randomUUID().toString().replace("-", "") +  suffixName;
+        String objectName = UUID.randomUUID().toString().replace("-", "") + suffixName;
         String contentType = file.getContentType();
-        try{
+        try {
             InputStream inputStream = file.getInputStream();
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(minioProperties.getBucketName())
                             .object(objectName)
-                            .stream(inputStream,file.getSize(),-1)
+                            .stream(inputStream, file.getSize(), -1)
                             .contentType(contentType != null ? contentType : "application/octet-stream")
                             .build()
             );
 
-            return minioProperties.getEndpoint()+"/"+minioProperties.getBucketName()+"/"+objectName;
+            return minioProperties.getEndpoint() + "/" + minioProperties.getBucketName() + "/" + objectName;
 
 
-
-
-        }catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-
-
 
 
         return "";

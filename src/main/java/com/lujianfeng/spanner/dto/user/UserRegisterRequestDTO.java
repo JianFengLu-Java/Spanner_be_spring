@@ -1,4 +1,4 @@
-package com.lujianfeng.spanner.dto;
+package com.lujianfeng.spanner.dto.user;
 
 import org.springframework.stereotype.Component;
 

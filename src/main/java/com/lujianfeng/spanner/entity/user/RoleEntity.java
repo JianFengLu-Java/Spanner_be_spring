@@ -1,8 +1,10 @@
 package com.lujianfeng.spanner.entity.user;
 
+import com.lujianfeng.spanner.entity.premission.PermissionEntity;
 import jakarta.persistence.*;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -55,5 +57,19 @@ public class RoleEntity {
 
     public void setRoleName(String roleName) {
         this.roleName = roleName;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        RoleEntity that = (RoleEntity) o;
+        return Objects.equals(id, that.id) && Objects.equals(roleName, that.roleName) && Objects.equals(permissions, that.permissions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, roleName, permissions);
     }
 }

@@ -1,4 +1,4 @@
-package com.lujianfeng.spanner.entity.user;
+package com.lujianfeng.spanner.entity.premission;
 
 import jakarta.persistence.*;
 

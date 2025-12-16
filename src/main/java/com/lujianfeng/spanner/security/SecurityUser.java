@@ -1,6 +1,6 @@
 package com.lujianfeng.spanner.security;
 
-import com.lujianfeng.spanner.entity.user.PermissionEntity;
+import com.lujianfeng.spanner.entity.premission.PermissionEntity;
 import com.lujianfeng.spanner.entity.user.RoleEntity;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import org.jspecify.annotations.NonNull;

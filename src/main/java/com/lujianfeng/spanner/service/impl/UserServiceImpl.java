@@ -1,7 +1,7 @@
 package com.lujianfeng.spanner.service.impl;
 
-import com.lujianfeng.spanner.dto.UserLoginRequestDTO;
-import com.lujianfeng.spanner.dto.UserRegisterRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.mapper.UserMapper;
 import com.lujianfeng.spanner.repository.UserRepository;

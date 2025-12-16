@@ -1,7 +1,7 @@
 package com.lujianfeng.spanner.controller;
 
-import com.lujianfeng.spanner.dto.UserLoginRequestDTO;
-import com.lujianfeng.spanner.dto.UserRegisterRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.UserVO;
 import org.springframework.http.HttpStatus;
