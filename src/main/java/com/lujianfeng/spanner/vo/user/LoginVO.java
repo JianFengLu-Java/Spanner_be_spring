@@ -21,4 +21,5 @@ public class LoginVO {
     private Long code;
     private String message;
     private String token;
+    private UserVO data;
 }

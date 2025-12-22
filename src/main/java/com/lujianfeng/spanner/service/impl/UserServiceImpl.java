@@ -73,11 +73,14 @@ public class UserServiceImpl implements UserService {
         boolean isPass = bCryptPasswordEncoder.matches(userLoginRequestDTO.getPassword(), user.getPassword());
         if (isPass) {
 
+            UserVO userVO = userMapper.toUserVO(user);
+
             String token = jwtUtil.generateToken(userName);
             return LoginVO.builder()
                     .code(200L)
                     .token(token)
                     .message("登录成功！")
+                    .data(userVO)
                     .build();
 
         } else {
