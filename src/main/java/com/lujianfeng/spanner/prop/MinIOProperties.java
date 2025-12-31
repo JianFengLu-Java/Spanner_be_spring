@@ -1,5 +1,7 @@
 package com.lujianfeng.spanner.prop;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -8,12 +10,14 @@ import org.springframework.stereotype.Component;
  * MinIO Server Properties
  *
  * @author lujianfeng
- * @date 2025-12-15 23:28
  * @version 1.0
+ * @date 2025-12-15 23:28
  * @description get prop from application.yaml
  *
  */
 
+@Setter
+@Getter
 @Component
 @ConfigurationProperties(prefix = "minio")
 
@@ -24,35 +28,4 @@ public class MinIOProperties {
     private String bucketName;
 
 
-    public String getEndpoint() {
-        return endpoint;
-    }
-
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
-
-    public String getAccessKey() {
-        return accessKey;
-    }
-
-    public void setAccessKey(String accessKey) {
-        this.accessKey = accessKey;
-    }
-
-    public String getSecretKey() {
-        return secretKey;
-    }
-
-    public void setSecretKey(String secretKey) {
-        this.secretKey = secretKey;
-    }
-
-    public String getBucketName() {
-        return bucketName;
-    }
-
-    public void setBucketName(String bucketName) {
-        this.bucketName = bucketName;
-    }
 }

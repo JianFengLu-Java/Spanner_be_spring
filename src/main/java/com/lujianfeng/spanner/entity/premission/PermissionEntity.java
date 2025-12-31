@@ -1,6 +1,8 @@
 package com.lujianfeng.spanner.entity.premission;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Objects;
 
@@ -11,6 +13,8 @@ import java.util.Objects;
  * @since 1.0
  */
 
+@Setter
+@Getter
 @Entity
 @Table(name = "permission")
 public class PermissionEntity {
@@ -20,25 +24,11 @@ public class PermissionEntity {
     private Long id;
     private String permission;
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getPermission() {
-        return permission;
-    }
-
-    public void setPermission(String permission) {
-        this.permission = permission;
-    }
-
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         PermissionEntity that = (PermissionEntity) o;
         return Objects.equals(id, that.id) && Objects.equals(permission, that.permission);
     }

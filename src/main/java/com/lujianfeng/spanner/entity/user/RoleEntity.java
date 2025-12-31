@@ -2,6 +2,7 @@ package com.lujianfeng.spanner.entity.user;
 
 import com.lujianfeng.spanner.entity.premission.PermissionEntity;
 import jakarta.persistence.*;
+import lombok.Data;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -15,7 +16,7 @@ import java.util.Set;
  * @date 2025/12/15
  * @since 1.0
  */
-
+@Data
 @Entity
 @Table(name = "role_info")
 public class RoleEntity {

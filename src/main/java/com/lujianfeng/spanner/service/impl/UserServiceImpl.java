@@ -17,6 +17,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author Lujianfeng
+ * @date 2025/12/31
+ * @version 1.0
+ * @since 1.0
+ */
+
 @Service
 public class UserServiceImpl implements UserService {
 
