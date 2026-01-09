@@ -19,8 +19,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * @author Lujianfeng
- * @date 2025/12/31
  * @version 1.0
+ * @date 2025/12/31
  * @since 1.0
  */
 
@@ -45,7 +45,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserVO register(UserRegisterRequestDTO userRegisterRequestDTO) {
         //UserEntity是用户实体类，保存了所有的用户信息
+        log.info("userRegisterRequestDTO={}", userRegisterRequestDTO.toString());
         UserEntity userEntity = userMapper.toUserEntity(userRegisterRequestDTO);
+        log.info("userEntity={}", userEntity.toString());
+        Long userAccount = userRepository.nextAccount();
+        log.info("userAccount={}", userAccount);
+        log.info("userAccountToString={}", userAccount.toString());
+        userEntity.setAccount(userAccount.toString());
         userEntity.setPassword(bCryptPasswordEncoder.encode(userRegisterRequestDTO.getPassword()));
         UserEntity user = userRepository.save(userEntity);
         return userMapper.toUserVO(user);
@@ -67,9 +73,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginVO login(UserLoginRequestDTO userLoginRequestDTO) {
-        String userName = userLoginRequestDTO.getUserName();
-        log.info(userName);
-        UserEntity user = userRepository.findByUserName(userName);
+        String account = userLoginRequestDTO.getAccount();
+        log.info(account);
+        UserEntity user = userRepository.findByAccount(account);
         if (user == null) {
             return LoginVO.builder()
                     .code(401L)
@@ -82,7 +88,7 @@ public class UserServiceImpl implements UserService {
 
             UserVO userVO = userMapper.toUserVO(user);
 
-            String token = jwtUtil.generateToken(userName);
+            String token = jwtUtil.generateToken(account);
             return LoginVO.builder()
                     .code(200L)
                     .token(token)

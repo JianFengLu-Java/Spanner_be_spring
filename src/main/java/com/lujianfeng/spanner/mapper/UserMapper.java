@@ -4,6 +4,8 @@ import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.vo.user.UserVO;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Mappings;
 
 /**
  * @author Lujianfeng
@@ -15,8 +17,13 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
-    UserEntity toUserEntity(UserRegisterRequestDTO userRegisterRequestDTO);
+    @Mappings({
+            @Mapping(target = "id", ignore = true),
+            @Mapping(target = "account", ignore = true),
+            @Mapping(target = "password", ignore = true),
+            @Mapping(target = "roles", ignore = true)
+    })
+    UserEntity toUserEntity(UserRegisterRequestDTO dto);
 
-    UserVO toUserVO(UserEntity userEntity);
-
+    UserVO toUserVO(UserEntity entity);
 }

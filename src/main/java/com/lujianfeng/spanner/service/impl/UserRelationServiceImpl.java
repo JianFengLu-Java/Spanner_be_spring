@@ -11,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
 /**
  * @author Lujianfeng
  * @version 1.0
@@ -35,7 +33,7 @@ public class UserRelationServiceImpl implements UserRelationService {
     @Override
     @Transactional
     public void applyRelation(UserEntity userEntity, UserEntity friendEntity) {
-        if (userEntity.getUserName().equals(friendEntity.getUserName())) {
+        if (userEntity.getAccount().equals(friendEntity.getAccount())) {
             return;
         }
         userRelationRepository.findByUserAndFriend(userEntity, friendEntity)

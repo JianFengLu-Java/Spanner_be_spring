@@ -62,6 +62,6 @@ public record SecurityUser(UserEntity userEntity) implements UserDetails {
 
     @Override
     public @NonNull String getUsername() {
-        return userEntity.getUserName();
+        return userEntity.getAccount();
     }
 }

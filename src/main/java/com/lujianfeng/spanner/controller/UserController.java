@@ -5,6 +5,7 @@ import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.UserVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +21,7 @@ import java.util.Map;
  */
 
 //register as a REST request
+@Slf4j
 @RestController
 //Root path is user
 @RequestMapping("/user")
@@ -37,6 +39,7 @@ public class UserController {
     //User registration
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(@RequestBody UserRegisterRequestDTO userRegisterRequestDTO) {
+        log.info(userRegisterRequestDTO.toString());
         try {
             UserVO userInfo = userService.register(userRegisterRequestDTO);
             return ResponseEntity.ok(
@@ -48,6 +51,7 @@ public class UserController {
                     )
             );
         } catch (Exception e) {
+            log.error(e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "error"));
         }
 

@@ -1,6 +1,8 @@
 package com.lujianfeng.spanner.entity.user;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -14,27 +16,41 @@ import java.util.Set;
  * @since 1.0
  */
 
+@Setter
+@Getter
 @Entity
-@Table(name = "user_info_test")
+@Table(
+        name = "user_info_test",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "account")
+        }
+)
 public class UserEntity {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(unique = true, nullable = false)
-    private String userName;
-    @Column
+
+    /**
+     * 账号：7-10 位数字，从 1000001 开始
+     */
+    @Column(nullable = false, length = 10)
+    private String account;
+
+    /**
+     * 真实姓名
+     */
+    @Column(nullable = false, length = 50)
+    private String realName;
+
+    @Column(nullable = false)
     private String password;
-    @Column
+
     private String avatarUrl;
-    @Column
     private String gender;
-    @Column
     private String email;
-    @Column
     private String phone;
-    @Column
     private String address;
-    @Column
     private Long age;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -43,85 +59,22 @@ public class UserEntity {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
-    private Set<RoleEntity> roles = new HashSet<RoleEntity>();
+    private Set<RoleEntity> roles = new HashSet<>();
 
-    public Set<RoleEntity> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<RoleEntity> roles) {
-        this.roles = roles;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getAvatarUrl() {
-        return avatarUrl;
-    }
-
-    public void setAvatarUrl(String avatarUrl) {
-        this.avatarUrl = avatarUrl;
-    }
-
-    public String getGender() {
-        return gender;
-    }
-
-    public void setGender(String gender) {
-        this.gender = gender;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
-    }
-
-    public Long getAge() {
-        return age;
-    }
-
-    public void setAge(Long age) {
-        this.age = age;
+    @Override
+    public String toString() {
+        return "UserEntity{" +
+                "id=" + id +
+                ", account='" + account + '\'' +
+                ", realName='" + realName + '\'' +
+                ", password='" + password + '\'' +
+                ", avatarUrl='" + avatarUrl + '\'' +
+                ", gender='" + gender + '\'' +
+                ", email='" + email + '\'' +
+                ", phone='" + phone + '\'' +
+                ", address='" + address + '\'' +
+                ", age=" + age +
+                ", roles=" + roles +
+                '}';
     }
 }
