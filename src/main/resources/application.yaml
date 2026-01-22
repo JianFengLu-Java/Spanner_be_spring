@@ -1,9 +1,12 @@
 spring:
+  devtools:
+    remote:
+      secret: Lujianfeng123
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:15432/spanner
-    username: postgres
-    password: Lujianfeng123
+    url: jdbc:postgresql://127.0.0.1:5432/spanner
+    username: root
+    password: lujianfeng123
   application:
     name: Spanner
   jpa:
@@ -16,7 +19,7 @@ spring:
       max-request-size: 300MB
   data:
     redis:
-      host: localhost
+      host: 127.0.0.1
       port: 6379
       password: Lujianfeng123
       database: 0
@@ -30,18 +33,16 @@ spring:
           min-idle: 0
           time-between-eviction-runs: 3000ms
 
-
-
 server:
   port: 8080
 
   #MinIO
 minio:
-  endpoint: http://localhost:9000
+  endpoint: http://127.0.0.1:9000
   accessKey: root
   secretKey: Lujianfeng123
   bucketName: pic
+  domain-url: http://spanner.top:9000
 
-  #redis
 
 

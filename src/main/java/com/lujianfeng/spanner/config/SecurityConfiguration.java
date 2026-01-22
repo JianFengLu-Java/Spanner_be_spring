@@ -49,7 +49,11 @@ public class SecurityConfiguration {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 // 4. 配置授权规则 (根据需求配置)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/user/login", "/user/register", "/ws/**", "/files/update/avatar/**")
+                        .requestMatchers("/user/login",
+                                "/user/register",
+                                "/ws/**",
+                                "/files/update/avatar/**",
+                                "/.~~spring-boot!~/remote-update")
                         .permitAll()
                         .anyRequest()
                         .authenticated()

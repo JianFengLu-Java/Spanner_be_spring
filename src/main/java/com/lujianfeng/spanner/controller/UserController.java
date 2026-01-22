@@ -42,12 +42,12 @@ public class UserController {
         log.info(userRegisterRequestDTO.toString());
         try {
             UserVO userInfo = userService.register(userRegisterRequestDTO);
+            log.info("用户注册");
             return ResponseEntity.ok(
                     Map.of(
                             "code", 200,
                             "data", userInfo,
                             "status", "success"
-
                     )
             );
         } catch (Exception e) {

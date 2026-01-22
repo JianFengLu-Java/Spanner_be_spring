@@ -49,7 +49,7 @@ public class FileServiceImpl implements FileService {
                             .build()
             );
 
-            return minioProperties.getEndpoint() + "/" + minioProperties.getBucketName() + "/" + objectName;
+            return minioProperties.getDomainUrl() + "/" + minioProperties.getBucketName() + "/" + objectName;
 
 
         } catch (Exception e) {
