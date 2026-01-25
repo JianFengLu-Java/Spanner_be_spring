@@ -36,7 +36,8 @@ public class CustomFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        logger.info("自定义过滤器执行");
+        logger.info("custom start test");
+        logger.info(request.getRequestURI());
         filterChain.doFilter(request, response);
     }
 }
