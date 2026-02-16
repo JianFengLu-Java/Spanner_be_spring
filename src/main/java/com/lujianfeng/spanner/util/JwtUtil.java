@@ -1,6 +1,8 @@
 package com.lujianfeng.spanner.util;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
@@ -17,6 +19,12 @@ import java.util.Date;
 @Component
 public class JwtUtil {
     private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
+    private static final String TOKEN_TYPE_CLAIM = "type";
+    private static final String ACCESS_TOKEN_TYPE = "access";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
+    private static final long ACCESS_TOKEN_EXPIRE_MS = 15 * 60 * 1000L;
+    private static final long REFRESH_TOKEN_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000L;
+    private static final long CLOCK_SKEW_SECONDS = 60L;
     private Key key;
 
 
@@ -31,34 +39,60 @@ public class JwtUtil {
     }
 
 
-    /**
-     * 创建Jwt Token
-     *
-     * @param username 用户名参数
-     */
     public String generateToken(String username) {
-        long EXPIRATION_TIME = 86400L;
-        return Jwts.builder()  //链式调用
-                .subject(username)  //设置用户信息
-                .issuedAt(new Date()) //创建时间
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME)) //设置过期时间
-                .signWith(key) //签名
+        return generateAccessToken(username);
+    }
+
+    public String generateAccessToken(String username) {
+        return generateTokenByType(username, ACCESS_TOKEN_TYPE, ACCESS_TOKEN_EXPIRE_MS);
+    }
+
+    public String generateRefreshToken(String username) {
+        return generateTokenByType(username, REFRESH_TOKEN_TYPE, REFRESH_TOKEN_EXPIRE_MS);
+    }
+
+    public String extractUsername(String token) {
+        return extractUsernameByType(token, ACCESS_TOKEN_TYPE);
+    }
+
+    public String extractUsernameFromRefreshToken(String token) {
+        return extractUsernameByType(token, REFRESH_TOKEN_TYPE);
+    }
+
+    public long getAccessTokenExpiresInSeconds() {
+        return ACCESS_TOKEN_EXPIRE_MS / 1000L;
+    }
+
+    private String generateTokenByType(String username, String tokenType, long expireMs) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(username)
+                .claim(TOKEN_TYPE_CLAIM, tokenType)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + expireMs))
+                .signWith(key)
                 .compact();
     }
 
-    /**
-     * 解析用户UserN🤔me
-     */
-    public String extractUsername(String token) {
+    private String extractUsernameByType(String token, String expectedType) {
         try {
-            return Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith((SecretKey) key)
+                    .clockSkewSeconds(CLOCK_SKEW_SECONDS)
                     .build()
                     .parseSignedClaims(token)
-                    .getPayload()
-                    .getSubject();
+                    .getPayload();
+            String tokenType = claims.get(TOKEN_TYPE_CLAIM, String.class);
+            if (!expectedType.equals(tokenType)) {
+                log.warn("token type mismatch. expected={}, actual={}", expectedType, tokenType);
+                return null;
+            }
+            return claims.getSubject();
         } catch (ExpiredJwtException e) {
             log.info("token expired");
+            return null;
+        } catch (JwtException | IllegalArgumentException e) {
+            log.warn("token invalid: {}", e.getMessage());
             return null;
         }
 

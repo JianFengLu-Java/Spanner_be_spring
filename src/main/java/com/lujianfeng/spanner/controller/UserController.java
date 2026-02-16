@@ -1,10 +1,17 @@
 package com.lujianfeng.spanner.controller;
 
+import com.lujianfeng.spanner.dto.user.RefreshTokenRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletAmountChangeRequestDTO;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.user.LoginVO;
+import com.lujianfeng.spanner.vo.user.PageResultVO;
 import com.lujianfeng.spanner.vo.user.UserVO;
+import com.lujianfeng.spanner.vo.user.WalletAccountVO;
+import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
+import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -71,7 +78,21 @@ public class UserController {
 
         } catch (Exception e) {
             // 服务器异常
-            LoginVO error = LoginVO.builder().token(null).code(500L).message("服务器内部错误").build();
+            LoginVO error = LoginVO.builder().token(null).refreshToken(null).code(500L).message("服务器内部错误").build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginVO> refresh(@RequestBody RefreshTokenRequestDTO dto) {
+        try {
+            LoginVO result = userService.refreshToken(dto == null ? null : dto.getRefreshToken());
+            if (result.getCode() == 200L) {
+                return ResponseEntity.ok(result);
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+        } catch (Exception e) {
+            LoginVO error = LoginVO.builder().token(null).refreshToken(null).code(500L).message("服务器内部错误").build();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
@@ -81,6 +102,94 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> me() {
         UserVO user = userService.getUserInfo();
         return ResponseEntity.ok(Map.of("user", user));
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<Map<String, Object>> updateMe(@RequestBody UserUpdateProfileRequestDTO dto) {
+        UserVO user = userService.updateUserInfo(dto);
+        return ResponseEntity.ok(Map.of("user", user));
+    }
+
+    @GetMapping("/wallet")
+    public ResponseEntity<Map<String, Object>> wallet() {
+        WalletAccountVO wallet = userService.getMyWallet();
+        return ResponseEntity.ok(
+                Map.of(
+                        "code", 200,
+                        "status", "success",
+                        "data", wallet
+                )
+        );
+    }
+
+    @PostMapping("/wallet/recharge")
+    public ResponseEntity<Map<String, Object>> recharge(@RequestBody WalletAmountChangeRequestDTO dto) {
+        try {
+            WalletChangeResultVO result = userService.rechargeMyWallet(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @PostMapping("/wallet/consume")
+    public ResponseEntity<Map<String, Object>> consume(@RequestBody WalletAmountChangeRequestDTO dto) {
+        try {
+            WalletChangeResultVO result = userService.consumeMyWallet(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @GetMapping("/wallet/flows")
+    public ResponseEntity<Map<String, Object>> walletFlows(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(required = false) String changeType
+    ) {
+        try {
+            PageResultVO<WalletFlowItemVO> result = userService.listMyWalletFlows(page, size, changeType);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
     }
 
 

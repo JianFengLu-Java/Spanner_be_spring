@@ -50,8 +50,10 @@ public class SecurityConfiguration {
                 // 4. 配置授权规则 (根据需求配置)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/user/login",
+                                "/user/refresh",
                                 "/user/register",
                                 "/ws/**",
+                                "/files/image/**",
                                 "/files/update/avatar/**",
                                 "/.~~spring-boot!~/remote-update")
                         .permitAll()

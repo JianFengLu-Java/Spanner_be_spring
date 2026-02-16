@@ -26,6 +26,8 @@ public class UserVO {
 
     private String address;
 
+    private String signature;
+
     private Long age;
 
 }

@@ -51,6 +51,7 @@ public class UserEntity {
     private String email;
     private String phone;
     private String address;
+    private String signature;
     private Long age;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -73,6 +74,7 @@ public class UserEntity {
                 ", email='" + email + '\'' +
                 ", phone='" + phone + '\'' +
                 ", address='" + address + '\'' +
+                ", signature='" + signature + '\'' +
                 ", age=" + age +
                 ", roles=" + roles +
                 '}';

@@ -13,15 +13,27 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 @Component
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    private static final List<String> EXCLUDED_PATH_PATTERNS = List.of(
+            "/user/login",
+            "/user/refresh",
+            "/user/register",
+            "/ws/**",
+            "/files/image/**",
+            "/files/update/avatar/**",
+            "/.~~spring-boot!~/remote-update"
+    );
 
     private final JwtUtil jwtUtil;
 
@@ -30,6 +42,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return EXCLUDED_PATH_PATTERNS.stream().anyMatch(pattern -> PATH_MATCHER.match(pattern, path));
     }
 
     @Override

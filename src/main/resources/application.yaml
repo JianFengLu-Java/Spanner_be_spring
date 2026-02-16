@@ -6,7 +6,7 @@ spring:
         enabled: true
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://127.0.0.1:5432/spanner
+    url: jdbc:postgresql://47.108.39.129:5432/spanner
     username: root
     password: lujianfeng123
   application:
@@ -21,7 +21,7 @@ spring:
       max-request-size: 300MB
   data:
     redis:
-      host: 127.0.0.1
+      host: 47.108.39.129
       port: 6379
       password: Lujianfeng123
       database: 0
@@ -40,7 +40,7 @@ server:
 
   #MinIO
 minio:
-  endpoint: http://127.0.0.1:9000
+  endpoint: http://47.108.39.129:9000
   accessKey: root
   secretKey: Lujianfeng123
   bucketName: pic
