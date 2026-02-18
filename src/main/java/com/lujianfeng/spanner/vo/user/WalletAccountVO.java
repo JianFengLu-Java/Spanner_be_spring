@@ -18,5 +18,7 @@ public class WalletAccountVO {
 
     private String status;
 
+    private Boolean securityPasswordSet;
+
     private LocalDateTime updatedAt;
 }

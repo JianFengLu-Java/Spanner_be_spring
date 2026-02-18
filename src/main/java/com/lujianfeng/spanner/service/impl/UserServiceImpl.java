@@ -3,23 +3,30 @@ package com.lujianfeng.spanner.service.impl;
 import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.entity.user.WalletAccountEntity;
 import com.lujianfeng.spanner.entity.user.WalletFlowEntity;
+import com.lujianfeng.spanner.entity.user.WalletTransferEntity;
 import com.lujianfeng.spanner.mapper.UserMapper;
 import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.repository.WalletAccountRepository;
 import com.lujianfeng.spanner.repository.WalletFlowRepository;
+import com.lujianfeng.spanner.repository.WalletTransferRepository;
 import com.lujianfeng.spanner.security.SecurityUser;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.util.JwtUtil;
 import com.lujianfeng.spanner.dto.user.WalletAmountChangeRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletSecurityPasswordUpdateRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferRequestDTO;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
 import com.lujianfeng.spanner.vo.user.UserVO;
 import com.lujianfeng.spanner.vo.user.WalletAccountVO;
 import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
 import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferApplyResultVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferResultVO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +43,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -52,6 +60,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final WalletAccountRepository walletAccountRepository;
     private final WalletFlowRepository walletFlowRepository;
+    private final WalletTransferRepository walletTransferRepository;
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final JwtUtil jwtUtil;
@@ -60,12 +69,14 @@ public class UserServiceImpl implements UserService {
     public UserServiceImpl(UserRepository userRepository,
                            WalletAccountRepository walletAccountRepository,
                            WalletFlowRepository walletFlowRepository,
+                           WalletTransferRepository walletTransferRepository,
                            UserMapper userMapper,
                            BCryptPasswordEncoder bCryptPasswordEncoder,
                            JwtUtil jwtUtil) {
         this.userRepository = userRepository;
         this.walletAccountRepository = walletAccountRepository;
         this.walletFlowRepository = walletFlowRepository;
+        this.walletTransferRepository = walletTransferRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.userMapper = userMapper;
         this.jwtUtil = jwtUtil;
@@ -253,7 +264,7 @@ public class UserServiceImpl implements UserService {
         BigDecimal afterBalance = beforeBalance.add(amount).setScale(2);
         wallet.setBalance(afterBalance);
         WalletAccountEntity saved = walletAccountRepository.save(wallet);
-        WalletFlowEntity flow = saveWalletFlow(saved, "RECHARGE", businessNo, requestDTO, amount, beforeBalance, afterBalance);
+        WalletFlowEntity flow = saveWalletFlow(saved, "RECHARGE", businessNo, amount, beforeBalance, afterBalance, requestDTO == null ? null : requestDTO.getRemark());
 
         return buildWalletChangeResult("RECHARGE", businessNo, requestDTO, amount, beforeBalance, afterBalance, saved, flow);
     }
@@ -271,6 +282,7 @@ public class UserServiceImpl implements UserService {
             wallet = createWalletIfAbsent(user);
             wallet = walletAccountRepository.findByUserIdForUpdate(user.getId());
         }
+        validateWalletSecurityPassword(wallet, requestDTO == null ? null : requestDTO.getSecurityPassword());
 
         String businessNo = resolveBusinessNo(requestDTO);
         BigDecimal beforeBalance = wallet.getBalance();
@@ -280,9 +292,155 @@ public class UserServiceImpl implements UserService {
         BigDecimal afterBalance = beforeBalance.subtract(amount).setScale(2);
         wallet.setBalance(afterBalance);
         WalletAccountEntity saved = walletAccountRepository.save(wallet);
-        WalletFlowEntity flow = saveWalletFlow(saved, "CONSUME", businessNo, requestDTO, amount, beforeBalance, afterBalance);
+        WalletFlowEntity flow = saveWalletFlow(saved, "CONSUME", businessNo, amount, beforeBalance, afterBalance, requestDTO == null ? null : requestDTO.getRemark());
 
         return buildWalletChangeResult("CONSUME", businessNo, requestDTO, amount, beforeBalance, afterBalance, saved, flow);
+    }
+
+    @Override
+    @Transactional
+    public WalletTransferApplyResultVO transferMyWallet(WalletTransferRequestDTO requestDTO) {
+        UserEntity fromUser = getCurrentUserEntity();
+        if (fromUser == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        if (requestDTO == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+
+        String toAccount = normalizeToAccount(requestDTO.getToAccount());
+        UserEntity toUser = userRepository.findByAccount(toAccount);
+        if (toUser == null) {
+            throw new IllegalArgumentException("收款账号不存在");
+        }
+        if (fromUser.getId().equals(toUser.getId())) {
+            throw new IllegalArgumentException("不支持给自己转账");
+        }
+
+        WalletAccountEntity fromWallet = getWalletForUpdate(fromUser);
+        validateWalletSecurityPassword(fromWallet, requestDTO.getSecurityPassword());
+        BigDecimal amount = normalizeTransferAmount(requestDTO);
+        String businessNo = resolveTransferBusinessNo(requestDTO);
+        if (walletTransferRepository.findByBusinessNo(businessNo) != null) {
+            throw new IllegalArgumentException("businessNo 已存在");
+        }
+        WalletTransferEntity transfer = new WalletTransferEntity();
+        transfer.setBusinessNo(businessNo);
+        transfer.setFromUserId(fromUser.getId());
+        transfer.setToUserId(toUser.getId());
+        transfer.setAmount(amount);
+        transfer.setRemark(requestDTO.getRemark());
+        transfer.setStatus("PENDING");
+        WalletTransferEntity saved = walletTransferRepository.save(transfer);
+
+        WalletTransferApplyResultVO result = new WalletTransferApplyResultVO();
+        result.setBusinessNo(saved.getBusinessNo());
+        result.setToAccount(toAccount);
+        result.setAmount(saved.getAmount());
+        result.setRemark(saved.getRemark());
+        result.setStatus(saved.getStatus());
+        result.setCreatedAt(saved.getCreatedAt());
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public WalletTransferResultVO acceptMyWalletTransfer(WalletTransferAcceptRequestDTO requestDTO) {
+        UserEntity toUser = getCurrentUserEntity();
+        if (toUser == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        String businessNo = normalizeBusinessNo(requestDTO == null ? null : requestDTO.getBusinessNo());
+        WalletTransferEntity transfer = walletTransferRepository.findByBusinessNoForUpdate(businessNo);
+        if (transfer == null) {
+            throw new IllegalArgumentException("转账申请不存在");
+        }
+        if (!"PENDING".equals(transfer.getStatus())) {
+            throw new IllegalArgumentException("该转账申请已处理");
+        }
+        if (!toUser.getId().equals(transfer.getToUserId())) {
+            throw new IllegalArgumentException("仅收款方可确认该转账");
+        }
+
+        UserEntity fromUser = userRepository.findById(transfer.getFromUserId()).orElse(null);
+        if (fromUser == null) {
+            throw new IllegalArgumentException("付款方账号不存在");
+        }
+
+        Long fromUserId = fromUser.getId();
+        Long toUserId = toUser.getId();
+        UserEntity firstLockUser = fromUserId < toUserId ? fromUser : toUser;
+        UserEntity secondLockUser = fromUserId < toUserId ? toUser : fromUser;
+        WalletAccountEntity firstWallet = getWalletForUpdate(firstLockUser);
+        WalletAccountEntity secondWallet = getWalletForUpdate(secondLockUser);
+        WalletAccountEntity fromWallet = fromUserId.equals(firstLockUser.getId()) ? firstWallet : secondWallet;
+        WalletAccountEntity toWallet = toUserId.equals(firstLockUser.getId()) ? firstWallet : secondWallet;
+
+        BigDecimal amount = transfer.getAmount();
+        BigDecimal fromBeforeBalance = fromWallet.getBalance();
+        if (fromBeforeBalance.compareTo(amount) < 0) {
+            throw new IllegalArgumentException("付款方钱包余额不足");
+        }
+        BigDecimal fromAfterBalance = fromBeforeBalance.subtract(amount).setScale(2);
+        BigDecimal toBeforeBalance = toWallet.getBalance();
+        BigDecimal toAfterBalance = toBeforeBalance.add(amount).setScale(2);
+
+        fromWallet.setBalance(fromAfterBalance);
+        toWallet.setBalance(toAfterBalance);
+        WalletAccountEntity savedFromWallet = walletAccountRepository.save(fromWallet);
+        WalletAccountEntity savedToWallet = walletAccountRepository.save(toWallet);
+
+        WalletFlowEntity outFlow = saveWalletFlow(savedFromWallet, "TRANSFER_OUT", transfer.getBusinessNo(), amount, fromBeforeBalance, fromAfterBalance, transfer.getRemark());
+        saveWalletFlow(savedToWallet, "TRANSFER_IN", transfer.getBusinessNo(), amount, toBeforeBalance, toAfterBalance, transfer.getRemark());
+
+        transfer.setStatus("ACCEPTED");
+        transfer.setAcceptedAt(LocalDateTime.now());
+        walletTransferRepository.save(transfer);
+
+        WalletTransferResultVO result = new WalletTransferResultVO();
+        UserEntity targetUser = userRepository.findById(transfer.getToUserId()).orElse(null);
+        result.setBusinessNo(transfer.getBusinessNo());
+        result.setToAccount(targetUser == null ? null : targetUser.getAccount());
+        result.setAmount(amount);
+        result.setRemark(transfer.getRemark());
+        result.setFromBeforeBalance(fromBeforeBalance);
+        result.setFromAfterBalance(fromAfterBalance);
+        result.setToBeforeBalance(toBeforeBalance);
+        result.setToAfterBalance(toAfterBalance);
+        result.setChangeTime(outFlow.getCreatedAt());
+        result.setFromWallet(toWalletVO(savedFromWallet));
+        result.setToWallet(toWalletVO(savedToWallet));
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public WalletAccountVO updateMyWalletSecurityPassword(WalletSecurityPasswordUpdateRequestDTO requestDTO) {
+        UserEntity user = getCurrentUserEntity();
+        if (user == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        if (requestDTO == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+
+        WalletAccountEntity wallet = walletAccountRepository.findByUserIdForUpdate(user.getId());
+        if (wallet == null) {
+            wallet = createWalletIfAbsent(user);
+            wallet = walletAccountRepository.findByUserIdForUpdate(user.getId());
+        }
+
+        String newSecurityPassword = normalizeNewSecurityPassword(requestDTO.getNewSecurityPassword());
+        if (wallet.getSecurityPassword() != null && !wallet.getSecurityPassword().isBlank()) {
+            String oldSecurityPassword = Objects.toString(requestDTO.getOldSecurityPassword(), "");
+            if (!bCryptPasswordEncoder.matches(oldSecurityPassword, wallet.getSecurityPassword())) {
+                throw new IllegalArgumentException("原安全密码错误");
+            }
+        }
+
+        wallet.setSecurityPassword(bCryptPasswordEncoder.encode(newSecurityPassword));
+        WalletAccountEntity saved = walletAccountRepository.save(wallet);
+        return toWalletVO(saved);
     }
 
     @Override
@@ -337,10 +495,10 @@ public class UserServiceImpl implements UserService {
     private WalletFlowEntity saveWalletFlow(WalletAccountEntity wallet,
                                             String changeType,
                                             String businessNo,
-                                            WalletAmountChangeRequestDTO requestDTO,
                                             BigDecimal amount,
                                             BigDecimal beforeBalance,
-                                            BigDecimal afterBalance) {
+                                            BigDecimal afterBalance,
+                                            String remark) {
         WalletFlowEntity flow = new WalletFlowEntity();
         flow.setWalletId(wallet.getId());
         flow.setWalletNo(wallet.getWalletNo());
@@ -350,7 +508,7 @@ public class UserServiceImpl implements UserService {
         flow.setAmount(amount);
         flow.setBeforeBalance(beforeBalance);
         flow.setAfterBalance(afterBalance);
-        flow.setRemark(requestDTO == null ? null : requestDTO.getRemark());
+        flow.setRemark(remark);
         return walletFlowRepository.save(flow);
     }
 
@@ -376,8 +534,11 @@ public class UserServiceImpl implements UserService {
             return null;
         }
         String normalized = changeType.trim().toUpperCase(Locale.ROOT);
-        if (!"RECHARGE".equals(normalized) && !"CONSUME".equals(normalized)) {
-            throw new IllegalArgumentException("changeType 仅支持 RECHARGE/CONSUME");
+        if (!"RECHARGE".equals(normalized)
+                && !"CONSUME".equals(normalized)
+                && !"TRANSFER_OUT".equals(normalized)
+                && !"TRANSFER_IN".equals(normalized)) {
+            throw new IllegalArgumentException("changeType 仅支持 RECHARGE/CONSUME/TRANSFER_OUT/TRANSFER_IN");
         }
         return normalized;
     }
@@ -403,6 +564,73 @@ public class UserServiceImpl implements UserService {
         return "BIZ-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
     }
 
+    private String resolveTransferBusinessNo(WalletTransferRequestDTO requestDTO) {
+        if (requestDTO.getBusinessNo() != null && !requestDTO.getBusinessNo().isBlank()) {
+            return requestDTO.getBusinessNo();
+        }
+        return "TRF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+    }
+
+    private String normalizeToAccount(String toAccount) {
+        if (toAccount == null || toAccount.isBlank()) {
+            throw new IllegalArgumentException("toAccount 不能为空");
+        }
+        return toAccount.trim();
+    }
+
+    private String normalizeBusinessNo(String businessNo) {
+        if (businessNo == null || businessNo.isBlank()) {
+            throw new IllegalArgumentException("businessNo 不能为空");
+        }
+        return businessNo.trim();
+    }
+
+    private BigDecimal normalizeTransferAmount(WalletTransferRequestDTO requestDTO) {
+        if (requestDTO.getAmount() == null) {
+            throw new IllegalArgumentException("amount 不能为空");
+        }
+        if (requestDTO.getAmount().scale() > 2) {
+            throw new IllegalArgumentException("amount 最多保留 2 位小数");
+        }
+        BigDecimal amount = requestDTO.getAmount().setScale(2, RoundingMode.UNNECESSARY);
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("amount 必须大于 0");
+        }
+        return amount;
+    }
+
+    private void validateWalletSecurityPassword(WalletAccountEntity wallet, String securityPassword) {
+        if (wallet.getSecurityPassword() == null || wallet.getSecurityPassword().isBlank()) {
+            throw new IllegalArgumentException("请先设置钱包安全密码");
+        }
+        if (securityPassword == null || securityPassword.isBlank()) {
+            throw new IllegalArgumentException("securityPassword 不能为空");
+        }
+        if (!bCryptPasswordEncoder.matches(securityPassword, wallet.getSecurityPassword())) {
+            throw new IllegalArgumentException("钱包安全密码错误");
+        }
+    }
+
+    private String normalizeNewSecurityPassword(String securityPassword) {
+        if (securityPassword == null || securityPassword.isBlank()) {
+            throw new IllegalArgumentException("newSecurityPassword 不能为空");
+        }
+        String normalized = securityPassword.trim();
+        if (!normalized.matches("^\\d{6}$")) {
+            throw new IllegalArgumentException("newSecurityPassword 必须是 6 位数字");
+        }
+        return normalized;
+    }
+
+    private WalletAccountEntity getWalletForUpdate(UserEntity user) {
+        WalletAccountEntity wallet = walletAccountRepository.findByUserIdForUpdate(user.getId());
+        if (wallet != null) {
+            return wallet;
+        }
+        createWalletIfAbsent(user);
+        return walletAccountRepository.findByUserIdForUpdate(user.getId());
+    }
+
     private WalletAccountEntity createWalletIfAbsent(UserEntity user) {
         WalletAccountEntity existed = walletAccountRepository.findByUserId(user.getId());
         if (existed != null) {
@@ -423,6 +651,7 @@ public class UserServiceImpl implements UserService {
         vo.setBalance(wallet.getBalance());
         vo.setCurrency(wallet.getCurrency());
         vo.setStatus(wallet.getStatus());
+        vo.setSecurityPasswordSet(wallet.getSecurityPassword() != null && !wallet.getSecurityPassword().isBlank());
         vo.setUpdatedAt(wallet.getUpdatedAt());
         return vo;
     }

@@ -7,13 +7,15 @@ import java.math.BigDecimal;
 
 @Getter
 @Setter
-public class WalletAmountChangeRequestDTO {
+public class WalletTransferRequestDTO {
+
+    private String toAccount;
 
     private BigDecimal amount;
+
+    private String securityPassword;
 
     private String businessNo;
 
     private String remark;
-
-    private String securityPassword;
 }

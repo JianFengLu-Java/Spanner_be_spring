@@ -1,12 +1,15 @@
 package com.lujianfeng.spanner.controller;
 
 import com.lujianfeng.spanner.dto.message.MessageDTO;
+import com.lujianfeng.spanner.dto.message.GroupMessageSendDTO;
 import com.lujianfeng.spanner.dto.message.PrivateMessageSendDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.entity.user.UserRelationEnum;
 import com.lujianfeng.spanner.repository.UserRelationRepository;
 import com.lujianfeng.spanner.repository.UserRepository;
+import com.lujianfeng.spanner.service.GroupMessageDispatchService;
 import com.lujianfeng.spanner.service.PrivateMessageDispatchService;
+import com.lujianfeng.spanner.vo.message.GroupMessageAckVO;
 import com.lujianfeng.spanner.vo.message.MessageAckVO;
 import com.lujianfeng.spanner.vo.message.WsErrorVO;
 import org.apache.logging.log4j.LogManager;
@@ -36,15 +39,55 @@ public class ChatController {
     private final UserRepository userRepository;
     private final UserRelationRepository userRelationRepository;
     private final PrivateMessageDispatchService privateMessageDispatchService;
+    private final GroupMessageDispatchService groupMessageDispatchService;
 
     public ChatController(SimpMessagingTemplate messagingTemplate,
                           UserRepository userRepository,
                           UserRelationRepository userRelationRepository,
-                          PrivateMessageDispatchService privateMessageDispatchService) {
+                          PrivateMessageDispatchService privateMessageDispatchService,
+                          GroupMessageDispatchService groupMessageDispatchService) {
         this.messagingTemplate = messagingTemplate;
         this.userRepository = userRepository;
         this.userRelationRepository = userRelationRepository;
         this.privateMessageDispatchService = privateMessageDispatchService;
+        this.groupMessageDispatchService = groupMessageDispatchService;
+    }
+
+    /**
+     * 群聊发送
+     */
+    @MessageMapping("chat/group.send")
+    public void sendGroupMessage(@Payload GroupMessageSendDTO payload, Principal principal) {
+        String from = principal == null ? null : principal.getName();
+        String clientMessageId = payload == null ? null : trim(payload.getClientMessageId());
+        if (from == null || from.isBlank()) {
+            log.warn("Drop group message because principal is missing");
+            return;
+        }
+        try {
+            String groupNo = payload == null ? null : trim(payload.getGroupNo());
+            String content = payload == null ? null : trim(payload.getContent());
+            if (groupNo == null) {
+                sendErrorToUser(from, "INVALID_GROUP_NO", "groupNo 不能为空", clientMessageId);
+                return;
+            }
+            if (content == null) {
+                sendErrorToUser(from, "INVALID_CONTENT", "content 不能为空", clientMessageId);
+                return;
+            }
+
+            GroupMessageAckVO ackVO =
+                    groupMessageDispatchService.dispatchGroupMessage(from, groupNo, content, clientMessageId);
+            messagingTemplate.convertAndSendToUser(from, "/queue/group.acks", ackVO);
+        } catch (IllegalArgumentException e) {
+            sendErrorToUser(from, "INVALID_GROUP", e.getMessage(), clientMessageId);
+        } catch (IllegalStateException e) {
+            sendErrorToUser(from, "GROUP_PERMISSION_DENIED", e.getMessage(), clientMessageId);
+        } catch (Exception e) {
+            log.error("Unhandled error while sending group message, from={}, clientMessageId={}",
+                    from, clientMessageId, e);
+            sendErrorToUser(from, "INTERNAL_ERROR", "群消息发送失败，请稍后重试", clientMessageId);
+        }
     }
 
     @MessageMapping("chat.send")

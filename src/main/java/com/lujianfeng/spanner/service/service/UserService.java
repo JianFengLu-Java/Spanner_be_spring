@@ -4,6 +4,9 @@ import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
 import com.lujianfeng.spanner.dto.user.WalletAmountChangeRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletSecurityPasswordUpdateRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
@@ -11,6 +14,8 @@ import com.lujianfeng.spanner.vo.user.UserVO;
 import com.lujianfeng.spanner.vo.user.WalletAccountVO;
 import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
 import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferApplyResultVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferResultVO;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -33,6 +38,12 @@ public interface UserService {
 
     WalletChangeResultVO consumeMyWallet(WalletAmountChangeRequestDTO requestDTO);
 
+    WalletTransferApplyResultVO transferMyWallet(WalletTransferRequestDTO requestDTO);
+
+    WalletTransferResultVO acceptMyWalletTransfer(WalletTransferAcceptRequestDTO requestDTO);
+
     PageResultVO<WalletFlowItemVO> listMyWalletFlows(Integer page, Integer size, String changeType);
+
+    WalletAccountVO updateMyWalletSecurityPassword(WalletSecurityPasswordUpdateRequestDTO requestDTO);
 
 }

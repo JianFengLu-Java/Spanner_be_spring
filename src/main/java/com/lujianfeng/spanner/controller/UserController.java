@@ -5,6 +5,9 @@ import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
 import com.lujianfeng.spanner.dto.user.WalletAmountChangeRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletSecurityPasswordUpdateRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
+import com.lujianfeng.spanner.dto.user.WalletTransferRequestDTO;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
@@ -12,6 +15,8 @@ import com.lujianfeng.spanner.vo.user.UserVO;
 import com.lujianfeng.spanner.vo.user.WalletAccountVO;
 import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
 import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferApplyResultVO;
+import com.lujianfeng.spanner.vo.user.WalletTransferResultVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -153,6 +158,75 @@ public class UserController {
                             "code", 200,
                             "status", "success",
                             "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @PostMapping("/wallet/transfer")
+    public ResponseEntity<Map<String, Object>> transfer(@RequestBody WalletTransferRequestDTO dto) {
+        try {
+            WalletTransferApplyResultVO result = userService.transferMyWallet(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "message", "转账申请已创建，等待收款方确认",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @PostMapping("/wallet/transfer/accept")
+    public ResponseEntity<Map<String, Object>> acceptTransfer(@RequestBody WalletTransferAcceptRequestDTO dto) {
+        try {
+            WalletTransferResultVO result = userService.acceptMyWalletTransfer(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "message", "转账已确认并入账",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @PutMapping("/wallet/security-password")
+    public ResponseEntity<Map<String, Object>> updateWalletSecurityPassword(@RequestBody WalletSecurityPasswordUpdateRequestDTO dto) {
+        try {
+            WalletAccountVO wallet = userService.updateMyWalletSecurityPassword(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "message", "钱包安全密码设置成功",
+                            "data", wallet
                     )
             );
         } catch (IllegalArgumentException ex) {

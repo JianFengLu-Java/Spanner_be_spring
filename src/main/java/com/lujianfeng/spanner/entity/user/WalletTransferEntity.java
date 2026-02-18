@@ -7,39 +7,41 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Setter
 @Getter
+@Setter
 @Entity
-@Table(
-        name = "wallet_account",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "wallet_no"),
-                @UniqueConstraint(columnNames = "user_id")
-        }
-)
-public class WalletAccountEntity {
+@Table(name = "wallet_transfer", indexes = {
+        @Index(name = "idx_wallet_transfer_from_created", columnList = "from_user_id,created_at"),
+        @Index(name = "idx_wallet_transfer_to_created", columnList = "to_user_id,created_at")
+}, uniqueConstraints = {
+        @UniqueConstraint(columnNames = "business_no")
+})
+public class WalletTransferEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "wallet_no", nullable = false, length = 32)
-    private String walletNo;
+    @Column(name = "business_no", nullable = false, length = 64)
+    private String businessNo;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @Column(name = "from_user_id", nullable = false)
+    private Long fromUserId;
+
+    @Column(name = "to_user_id", nullable = false)
+    private Long toUserId;
 
     @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal balance;
+    private BigDecimal amount;
 
-    @Column(nullable = false, length = 10)
-    private String currency;
+    @Column(length = 255)
+    private String remark;
 
-    @Column(nullable = false, length = 16)
+    @Column(nullable = false, length = 20)
     private String status;
 
-    @Column(name = "security_password", length = 100)
-    private String securityPassword;
+    @Column(name = "accepted_at")
+    private LocalDateTime acceptedAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -56,14 +58,8 @@ public class WalletAccountEntity {
         if (updatedAt == null) {
             updatedAt = now;
         }
-        if (balance == null) {
-            balance = BigDecimal.ZERO.setScale(2);
-        }
-        if (currency == null || currency.isBlank()) {
-            currency = "CNY";
-        }
         if (status == null || status.isBlank()) {
-            status = "ACTIVE";
+            status = "PENDING";
         }
     }
 
