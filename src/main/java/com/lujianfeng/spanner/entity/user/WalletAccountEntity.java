@@ -32,6 +32,12 @@ public class WalletAccountEntity {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal balance;
 
+    @Column(name = "balance_cent")
+    private Long balanceCent;
+
+    @Column(name = "reward_version")
+    private Integer rewardVersion;
+
     @Column(nullable = false, length = 10)
     private String currency;
 
@@ -58,6 +64,12 @@ public class WalletAccountEntity {
         }
         if (balance == null) {
             balance = BigDecimal.ZERO.setScale(2);
+        }
+        if (balanceCent == null) {
+            balanceCent = 0L;
+        }
+        if (rewardVersion == null) {
+            rewardVersion = 0;
         }
         if (currency == null || currency.isBlank()) {
             currency = "CNY";

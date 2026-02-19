@@ -12,6 +12,10 @@ public class VipPurchaseResultVO {
 
     private String purchaseNo;
 
+    private String paymentOrderNo;
+
+    private String paymentMethod;
+
     private String planCode;
 
     private String planName;

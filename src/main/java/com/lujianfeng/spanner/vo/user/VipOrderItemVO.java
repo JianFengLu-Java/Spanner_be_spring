@@ -12,6 +12,10 @@ public class VipOrderItemVO {
 
     private String purchaseNo;
 
+    private String paymentOrderNo;
+
+    private String paymentMethod;
+
     private String planCode;
 
     private String planName;

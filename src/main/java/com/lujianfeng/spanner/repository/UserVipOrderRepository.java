@@ -12,4 +12,6 @@ public interface UserVipOrderRepository extends JpaRepository<UserVipOrderEntity
     Page<UserVipOrderEntity> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     UserVipOrderEntity findByPurchaseNo(String purchaseNo);
+
+    UserVipOrderEntity findByPaymentOrderNo(String paymentOrderNo);
 }

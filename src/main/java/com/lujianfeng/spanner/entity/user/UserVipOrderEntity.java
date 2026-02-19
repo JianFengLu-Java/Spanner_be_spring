@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "user_vip_order", indexes = {
         @Index(name = "idx_user_vip_order_user_created", columnList = "user_id,created_at"),
-        @Index(name = "idx_user_vip_order_purchase_no", columnList = "purchase_no", unique = true)
+        @Index(name = "idx_user_vip_order_purchase_no", columnList = "purchase_no", unique = true),
+        @Index(name = "idx_user_vip_order_payment_order_no", columnList = "payment_order_no", unique = true)
 })
 public class UserVipOrderEntity {
 
@@ -25,6 +26,12 @@ public class UserVipOrderEntity {
 
     @Column(name = "purchase_no", nullable = false, length = 64)
     private String purchaseNo;
+
+    @Column(name = "payment_order_no", nullable = false, length = 64)
+    private String paymentOrderNo;
+
+    @Column(name = "payment_method", nullable = false, length = 32)
+    private String paymentMethod;
 
     @Column(name = "plan_code", nullable = false, length = 16)
     private String planCode;

@@ -20,6 +20,7 @@ public class LoginVO {
 
     private Long code;
     private String message;
+    private Long userId;
     private String token;
     private String refreshToken;
     private Long accessTokenExpiresIn;

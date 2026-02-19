@@ -8,6 +8,8 @@ import lombok.Setter;
 public class VipPurchaseRequestDTO {
 
     private String planCode;
+    
+    private String paymentMethod;
 
     private String securityPassword;
 

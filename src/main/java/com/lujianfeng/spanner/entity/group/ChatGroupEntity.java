@@ -47,16 +47,16 @@ public class ChatGroupEntity {
     @Column(length = 500)
     private String summary;
 
-    @Column(name = "invite_mode", nullable = false, length = 32)
+    @Column(name = "invite_mode", length = 32)
     private String inviteMode;
 
-    @Column(name = "member_can_edit_group_name", nullable = false)
+    @Column(name = "member_can_edit_group_name")
     private Boolean memberCanEditGroupName;
 
-    @Column(name = "join_verification_enabled", nullable = false)
+    @Column(name = "join_verification_enabled")
     private Boolean joinVerificationEnabled;
 
-    @Column(name = "announcement_permission", nullable = false, length = 32)
+    @Column(name = "announcement_permission", length = 32)
     private String announcementPermission;
 
     @Column(name = "max_members", nullable = false)

@@ -43,7 +43,7 @@
 - 会员开通成功后，服务端会自动发送一条系统私信给当前用户：
   - 发送方账号：`SYSTEM`
   - 接收方账号：当前登录用户账号
-  - 通知内容包含：套餐名称、成长值到账、当前等级、会员到期时间
+  - 通知内容包含：套餐名称、支付方式、账单流水号、成长值到账、当前等级、会员到期时间
 - 推送策略：
   - 在线：通过 WebSocket 实时下发到 `/user/queue/messages`
   - 离线：写入离线消息队列，用户上线后通过离线消息拉取接口获取
@@ -77,6 +77,7 @@ Content-Type: application/json
 ```json
 {
   "planCode": "MONTHLY",
+  "paymentMethod": "WALLET",
   "securityPassword": "123456",
   "purchaseNo": "VIP_202602190001"
 }
@@ -84,6 +85,7 @@ Content-Type: application/json
 
 ### 字段说明
 - `planCode`：可选，支持 `MONTHLY/QUARTERLY/YEARLY`，不传默认 `MONTHLY`（20 元/月）。
+- `paymentMethod`：可选，当前支持 `WALLET`，不传默认 `WALLET`。
 - `securityPassword`：必填，钱包 6 位安全密码。
 - `purchaseNo`：可选，自定义业务单号；不传后端自动生成。
 
@@ -95,6 +97,8 @@ Content-Type: application/json
   "message": "会员开通成功",
   "data": {
     "purchaseNo": "VIP_202602190001",
+    "paymentOrderNo": "PAY_202602190001",
+    "paymentMethod": "WALLET",
     "planCode": "MONTHLY",
     "planName": "月费会员",
     "amount": 20.00,
@@ -177,6 +181,8 @@ Content-Type: application/json
     "records": [
       {
         "purchaseNo": "VIP_202602190001",
+        "paymentOrderNo": "PAY_202602190001",
+        "paymentMethod": "WALLET",
         "planCode": "MONTHLY",
         "planName": "月费会员",
         "amount": 20.00,

@@ -52,6 +52,8 @@
 - `id`：主键
 - `user_id`：用户 ID
 - `purchase_no`：购买单号（唯一）
+- `payment_order_no`：支付账单流水号（唯一）
+- `payment_method`：支付方式（当前 `WALLET`）
 - `plan_code`：套餐编码
 - `plan_name`：套餐名称
 - `amount`：支付金额
@@ -65,6 +67,7 @@
 索引：
 - `idx_user_vip_order_user_created(user_id, created_at)`
 - `idx_user_vip_order_purchase_no(purchase_no)` 唯一
+- `idx_user_vip_order_payment_order_no(payment_order_no)` 唯一
 
 ### 4.3 钱包流水扩展
 - 新增流水类型：`VIP_PURCHASE`。
@@ -75,7 +78,7 @@
 1. 校验登录用户与请求参数。
 2. 解析套餐（默认 `MONTHLY`）。
 3. 锁定钱包并校验安全密码。
-4. 校验余额后扣款，写入钱包流水 `VIP_PURCHASE`。
+4. 生成支付账单流水号 `paymentOrderNo`，校验余额后扣款，写入钱包流水 `VIP_PURCHASE`（businessNo 使用 `paymentOrderNo`）。
 5. 计算会员时间：
    - 若当前 `vipExpireAt > now`，从当前到期时间继续叠加；
    - 否则从 `now` 开始计算。

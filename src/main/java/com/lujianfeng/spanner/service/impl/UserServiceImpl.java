@@ -9,6 +9,7 @@ import com.lujianfeng.spanner.event.message.VipOpenedNotifyDomainEvent;
 import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserVipOrderEntity;
 import com.lujianfeng.spanner.entity.user.UserEntity;
+import com.lujianfeng.spanner.entity.user.VipPaymentMethodType;
 import com.lujianfeng.spanner.entity.user.VipPlanType;
 import com.lujianfeng.spanner.entity.user.WalletAccountEntity;
 import com.lujianfeng.spanner.entity.user.WalletFlowEntity;
@@ -198,6 +199,7 @@ public class UserServiceImpl implements UserService {
             String refreshToken = jwtUtil.generateRefreshToken(account);
             return LoginVO.builder()
                     .code(200L)
+                    .userId(user.getId())
                     .token(accessToken)
                     .refreshToken(refreshToken)
                     .accessTokenExpiresIn(jwtUtil.getAccessTokenExpiresInSeconds())
@@ -252,6 +254,7 @@ public class UserServiceImpl implements UserService {
         String newRefreshToken = jwtUtil.generateRefreshToken(account);
         return LoginVO.builder()
                 .code(200L)
+                .userId(user.getId())
                 .token(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .accessTokenExpiresIn(jwtUtil.getAccessTokenExpiresInSeconds())
@@ -519,6 +522,7 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("用户未登录");
         }
         VipPlanType plan = VipPlanType.fromCode(requestDTO == null ? null : requestDTO.getPlanCode());
+        VipPaymentMethodType paymentMethod = VipPaymentMethodType.fromCode(requestDTO == null ? null : requestDTO.getPaymentMethod());
         WalletAccountEntity wallet = getWalletForUpdate(user);
         validateWalletSecurityPassword(wallet, requestDTO == null ? null : requestDTO.getSecurityPassword());
 
@@ -534,7 +538,19 @@ public class UserServiceImpl implements UserService {
         if (userVipOrderRepository.findByPurchaseNo(purchaseNo) != null) {
             throw new IllegalArgumentException("purchaseNo 已存在");
         }
-        saveWalletFlow(savedWallet, "VIP_PURCHASE", purchaseNo, plan.getPrice(), beforeBalance, afterBalance, plan.getPlanName());
+        String paymentOrderNo = resolveVipPaymentOrderNo();
+        if (userVipOrderRepository.findByPaymentOrderNo(paymentOrderNo) != null) {
+            throw new IllegalArgumentException("paymentOrderNo 已存在");
+        }
+        saveWalletFlow(
+                savedWallet,
+                "VIP_PURCHASE",
+                paymentOrderNo,
+                plan.getPrice(),
+                beforeBalance,
+                afterBalance,
+                plan.getPlanName() + " / " + paymentMethod.getCode()
+        );
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime base = user.getVipExpireAt() != null && user.getVipExpireAt().isAfter(now) ? user.getVipExpireAt() : now;
@@ -546,6 +562,8 @@ public class UserServiceImpl implements UserService {
         UserVipOrderEntity order = new UserVipOrderEntity();
         order.setUserId(savedUser.getId());
         order.setPurchaseNo(purchaseNo);
+        order.setPaymentOrderNo(paymentOrderNo);
+        order.setPaymentMethod(paymentMethod.getCode());
         order.setPlanCode(plan.getCode());
         order.setPlanName(plan.getPlanName());
         order.setAmount(plan.getPrice());
@@ -557,11 +575,13 @@ public class UserServiceImpl implements UserService {
         userVipOrderRepository.save(order);
         eventPublisher.publishEvent(new VipOpenedNotifyDomainEvent(
                 savedUser.getAccount(),
-                buildVipOpenedNotifyContent(plan, endAt, savedUser.getUserLevel())
+                buildVipOpenedNotifyContent(plan, endAt, savedUser.getUserLevel(), paymentMethod.getCode(), paymentOrderNo)
         ));
 
         VipPurchaseResultVO vo = new VipPurchaseResultVO();
         vo.setPurchaseNo(purchaseNo);
+        vo.setPaymentOrderNo(paymentOrderNo);
+        vo.setPaymentMethod(paymentMethod.getCode());
         vo.setPlanCode(plan.getCode());
         vo.setPlanName(plan.getPlanName());
         vo.setAmount(plan.getPrice());
@@ -818,6 +838,10 @@ public class UserServiceImpl implements UserService {
         return "VIP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
     }
 
+    private String resolveVipPaymentOrderNo() {
+        return "PAY-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+    }
+
     private VipPlanVO toVipPlanVO(VipPlanType planType) {
         VipPlanVO vo = new VipPlanVO();
         vo.setPlanCode(planType.getCode());
@@ -842,6 +866,8 @@ public class UserServiceImpl implements UserService {
     private VipOrderItemVO toVipOrderItemVO(UserVipOrderEntity order) {
         VipOrderItemVO vo = new VipOrderItemVO();
         vo.setPurchaseNo(order.getPurchaseNo());
+        vo.setPaymentOrderNo(order.getPaymentOrderNo());
+        vo.setPaymentMethod(order.getPaymentMethod());
         vo.setPlanCode(order.getPlanCode());
         vo.setPlanName(order.getPlanName());
         vo.setAmount(order.getAmount());
@@ -895,13 +921,17 @@ public class UserServiceImpl implements UserService {
 
     private String buildVipOpenedNotifyContent(VipPlanType plan,
                                                LocalDateTime vipExpireAt,
-                                               Integer userLevel) {
+                                               Integer userLevel,
+                                               String paymentMethod,
+                                               String paymentOrderNo) {
         String expireAt = vipExpireAt == null
                 ? "-"
                 : vipExpireAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         return String.format(
-                "VIP开通成功：%s，到账成长值%d，当前等级Lv.%d，会员有效期至%s。",
+                "VIP开通成功：%s，支付方式%s，账单流水号%s，到账成长值%d，当前等级Lv.%d，会员有效期至%s。",
                 plan.getPlanName(),
+                paymentMethod,
+                paymentOrderNo,
                 plan.getGrowthBonus(),
                 userLevel == null ? 1 : userLevel,
                 expireAt

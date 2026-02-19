@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 @Setter
 public class UserVO {
 
+    private Long userId;
+
     private String account;
 
     private String realName;

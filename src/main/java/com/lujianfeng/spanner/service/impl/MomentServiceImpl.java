@@ -14,6 +14,7 @@ import com.lujianfeng.spanner.repository.MomentCommentRepository;
 import com.lujianfeng.spanner.repository.MomentLikeRepository;
 import com.lujianfeng.spanner.repository.MomentRepository;
 import com.lujianfeng.spanner.repository.UserRelationRepository;
+import com.lujianfeng.spanner.service.task.TaskRewardService;
 import com.lujianfeng.spanner.service.service.MomentService;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.moment.CursorPageVO;
@@ -50,18 +51,21 @@ public class MomentServiceImpl implements MomentService {
     private final MomentCommentRepository momentCommentRepository;
     private final UserRelationRepository userRelationRepository;
     private final UserService userService;
+    private final TaskRewardService taskRewardService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public MomentServiceImpl(MomentRepository momentRepository,
                              MomentLikeRepository momentLikeRepository,
                              MomentCommentRepository momentCommentRepository,
                              UserRelationRepository userRelationRepository,
-                             UserService userService) {
+                             UserService userService,
+                             TaskRewardService taskRewardService) {
         this.momentRepository = momentRepository;
         this.momentLikeRepository = momentLikeRepository;
         this.momentCommentRepository = momentCommentRepository;
         this.userRelationRepository = userRelationRepository;
         this.userService = userService;
+        this.taskRewardService = taskRewardService;
     }
 
     @Override
@@ -143,6 +147,11 @@ public class MomentServiceImpl implements MomentService {
         entity.setCommentsCount(0L);
 
         MomentEntity saved = momentRepository.save(entity);
+        try {
+            taskRewardService.onMomentCreated(saved.getId(), currentUser.getId());
+        } catch (Exception ignored) {
+            // 奖励失败不阻塞发帖主流程
+        }
         return toMomentItem(saved, currentUser, false);
     }
 
@@ -338,6 +347,11 @@ public class MomentServiceImpl implements MomentService {
         MomentCommentEntity saved = momentCommentRepository.save(entity);
         moment.setCommentsCount(moment.getCommentsCount() + 1);
         momentRepository.save(moment);
+        try {
+            taskRewardService.onCommentCreated(saved.getId(), moment.getId(), currentUser.getId(), text);
+        } catch (Exception ignored) {
+            // 奖励失败不阻塞回复主流程
+        }
 
         return toCommentItem(saved, moment.getId(), 0L);
     }
