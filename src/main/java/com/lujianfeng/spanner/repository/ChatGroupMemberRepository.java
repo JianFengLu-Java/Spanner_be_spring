@@ -16,4 +16,6 @@ public interface ChatGroupMemberRepository extends JpaRepository<ChatGroupMember
     boolean existsByGroupIdAndUserAccount(Long groupId, String userAccount);
 
     void deleteByGroupIdAndUserAccount(Long groupId, String userAccount);
+
+    void deleteByGroupId(Long groupId);
 }

@@ -1,9 +1,11 @@
 package com.lujianfeng.spanner.controller;
 
 import com.lujianfeng.spanner.dto.user.RefreshTokenRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserGrowthChangeRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
+import com.lujianfeng.spanner.dto.user.VipPurchaseRequestDTO;
 import com.lujianfeng.spanner.dto.user.WalletAmountChangeRequestDTO;
 import com.lujianfeng.spanner.dto.user.WalletSecurityPasswordUpdateRequestDTO;
 import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
@@ -12,6 +14,10 @@ import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
 import com.lujianfeng.spanner.vo.user.UserVO;
+import com.lujianfeng.spanner.vo.user.VipOrderItemVO;
+import com.lujianfeng.spanner.vo.user.VipPlanVO;
+import com.lujianfeng.spanner.vo.user.VipProfileVO;
+import com.lujianfeng.spanner.vo.user.VipPurchaseResultVO;
 import com.lujianfeng.spanner.vo.user.WalletAccountVO;
 import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
 import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
@@ -23,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -248,6 +255,100 @@ public class UserController {
     ) {
         try {
             PageResultVO<WalletFlowItemVO> result = userService.listMyWalletFlows(page, size, changeType);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @GetMapping("/vip/plans")
+    public ResponseEntity<Map<String, Object>> vipPlans() {
+        List<VipPlanVO> plans = userService.listVipPlans();
+        return ResponseEntity.ok(
+                Map.of(
+                        "code", 200,
+                        "status", "success",
+                        "data", plans
+                )
+        );
+    }
+
+    @GetMapping("/vip/profile")
+    public ResponseEntity<Map<String, Object>> vipProfile() {
+        VipProfileVO profile = userService.getMyVipProfile();
+        return ResponseEntity.ok(
+                Map.of(
+                        "code", 200,
+                        "status", "success",
+                        "data", profile
+                )
+        );
+    }
+
+    @PostMapping("/vip/purchase")
+    public ResponseEntity<Map<String, Object>> purchaseVip(@RequestBody VipPurchaseRequestDTO dto) {
+        try {
+            VipPurchaseResultVO result = userService.purchaseVip(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "message", "会员开通成功",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @PostMapping("/growth/add")
+    public ResponseEntity<Map<String, Object>> addGrowth(@RequestBody UserGrowthChangeRequestDTO dto) {
+        try {
+            VipProfileVO result = userService.addMyGrowth(dto);
+            return ResponseEntity.ok(
+                    Map.of(
+                            "code", 200,
+                            "status", "success",
+                            "data", result
+                    )
+            );
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(
+                    Map.of(
+                            "code", 400,
+                            "status", "fail",
+                            "message", ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @GetMapping("/vip/orders")
+    public ResponseEntity<Map<String, Object>> vipOrders(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size
+    ) {
+        try {
+            PageResultVO<VipOrderItemVO> result = userService.listMyVipOrders(page, size);
             return ResponseEntity.ok(
                     Map.of(
                             "code", 200,

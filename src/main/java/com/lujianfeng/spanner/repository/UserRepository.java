@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
+
 /**
  * @author Lujianfeng
  * @version 1.0
@@ -21,4 +24,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Long nextAccount();
 
     UserEntity findByAccount(String account);
+
+    List<UserEntity> findByAccountIn(Collection<String> accounts);
 }

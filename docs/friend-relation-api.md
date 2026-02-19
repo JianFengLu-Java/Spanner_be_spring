@@ -75,11 +75,19 @@
 ## 6. 查询好友列表
 - 方法: `GET /friends`
 - 返回的每个好友项包含 `signature`（个性签名，`String`，可为空）。
+- 返回的每个好友项新增：
+- `isVip`（`Boolean`）
+- `growthValue`（`Long`）
+- `vipLevel`（`Integer`）
 
 ## 7. 查询待处理好友申请（收到的请求）
 - 方法: `GET /friends/requests/pending`
 - 语义: 仅返回 `INBOUND + PENDING`
 - 返回的每个申请人信息包含 `signature`（个性签名，`String`，可为空）。
+- 返回的每个申请人信息新增：
+- `isVip`（`Boolean`）
+- `growthValue`（`Long`）
+- `vipLevel`（`Integer`）
 
 ## 8. 分页查询好友申请历史
 - 方法: `GET /friends/requests/history`
@@ -136,6 +144,10 @@
 ## 10. 按账号查询用户
 - 方法: `GET /friends/users/{account}`
 - 返回字段新增 `signature`（个性签名，`String`，可为空）。
+- 返回字段新增：
+- `isVip`（`Boolean`）
+- `growthValue`（`Long`）
+- `vipLevel`（`Integer`）
 
 ## 错误码约定
 - `400`: 参数错误，`errorCode=FRIEND_REQUEST_INVALID_PARAM`

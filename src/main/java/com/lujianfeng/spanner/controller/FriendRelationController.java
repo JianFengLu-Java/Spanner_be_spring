@@ -19,6 +19,7 @@ import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -219,6 +220,9 @@ public class FriendRelationController {
         data.put("realName", target.getRealName());
         data.put("avatarUrl", target.getAvatarUrl());
         data.put("signature", target.getSignature());
+        data.put("isVip", isVip(target));
+        data.put("growthValue", normalizeGrowthValue(target));
+        data.put("vipLevel", normalizeVipLevel(target));
         data.put("isSelf", currentUser.getId().equals(target.getId()));
         data.put("relationType", relation == null ? null : relation.getRelationType());
         data.put("verificationMessage", relation == null ? null : relation.getVerificationMessage());
@@ -326,6 +330,9 @@ public class FriendRelationController {
                 .gender(friend.getGender())
                 .signature(friend.getSignature())
                 .age(friend.getAge())
+                .isVip(isVip(friend))
+                .growthValue(normalizeGrowthValue(friend))
+                .vipLevel(normalizeVipLevel(friend))
                 .relationType(relation.getRelationType())
                 .verificationMessage(relation.getVerificationMessage())
                 .createTime(relation.getCreateTime())
@@ -345,10 +352,33 @@ public class FriendRelationController {
                 .gender(requester.getGender())
                 .signature(requester.getSignature())
                 .age(requester.getAge())
+                .isVip(isVip(requester))
+                .growthValue(normalizeGrowthValue(requester))
+                .vipLevel(normalizeVipLevel(requester))
                 .relationType(relation.getRelationType())
                 .verificationMessage(relation.getVerificationMessage())
                 .createTime(relation.getCreateTime())
                 .build();
+    }
+
+    private boolean isVip(UserEntity user) {
+        return user != null
+                && user.getVipExpireAt() != null
+                && user.getVipExpireAt().isAfter(LocalDateTime.now());
+    }
+
+    private long normalizeGrowthValue(UserEntity user) {
+        if (user == null || user.getGrowthValue() == null) {
+            return 0L;
+        }
+        return Math.max(user.getGrowthValue(), 0L);
+    }
+
+    private int normalizeVipLevel(UserEntity user) {
+        if (user == null || user.getUserLevel() == null || user.getUserLevel() < 1) {
+            return 1;
+        }
+        return user.getUserLevel();
     }
 
     private boolean isUserOnline(String account) {

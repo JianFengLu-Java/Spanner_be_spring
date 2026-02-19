@@ -25,5 +25,11 @@ public interface UserMapper {
     })
     UserEntity toUserEntity(UserRegisterRequestDTO dto);
 
+    @Mappings({
+            @Mapping(target = "isVip", expression = "java(entity != null && entity.getVipExpireAt() != null && entity.getVipExpireAt().isAfter(java.time.LocalDateTime.now()))"),
+            @Mapping(target = "growthValue", expression = "java(entity == null || entity.getGrowthValue() == null ? 0L : entity.getGrowthValue())"),
+            @Mapping(target = "vipLevel", expression = "java(entity == null || entity.getUserLevel() == null || entity.getUserLevel() < 1 ? 1 : entity.getUserLevel())"),
+            @Mapping(target = "userLevel", expression = "java(entity == null || entity.getUserLevel() == null || entity.getUserLevel() < 1 ? 1 : entity.getUserLevel())")
+    })
     UserVO toUserVO(UserEntity entity);
 }

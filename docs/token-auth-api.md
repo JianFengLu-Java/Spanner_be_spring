@@ -37,7 +37,10 @@
     "phone": "13800000000",
     "address": "Shanghai",
     "signature": "保持热爱，奔赴山海",
-    "age": 20
+    "age": 20,
+    "isVip": true,
+    "growthValue": 1200,
+    "vipLevel": 3
   }
 }
 ```
@@ -140,10 +143,18 @@ Authorization: Bearer <accessToken>
     "phone": "13800000000",
     "address": "Shanghai",
     "signature": "保持热爱，奔赴山海",
-    "age": 20
+    "age": 20,
+    "isVip": true,
+    "growthValue": 1200,
+    "vipLevel": 3
   }
 }
 ```
+
+### 4.1 用户信息新增字段说明（前端）
+- `isVip`: 是否为 VIP 用户，`Boolean`
+- `growthValue`: 用户成长值，`Long`
+- `vipLevel`: VIP 等级，`Integer`
 
 ## 5. 修改当前用户信息
 - 方法: `PUT /user/me`
@@ -180,7 +191,10 @@ Content-Type: application/json
     "phone": "13800000000",
     "address": "Shanghai",
     "signature": "新的个性签名",
-    "age": 21
+    "age": 21,
+    "isVip": true,
+    "growthValue": 1200,
+    "vipLevel": 3
   }
 }
 ```

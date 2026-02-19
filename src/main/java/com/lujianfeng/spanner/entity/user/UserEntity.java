@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -53,6 +54,9 @@ public class UserEntity {
     private String address;
     private String signature;
     private Long age;
+    private LocalDateTime vipExpireAt;
+    private Long growthValue;
+    private Integer userLevel;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -76,6 +80,9 @@ public class UserEntity {
                 ", address='" + address + '\'' +
                 ", signature='" + signature + '\'' +
                 ", age=" + age +
+                ", vipExpireAt=" + vipExpireAt +
+                ", growthValue=" + growthValue +
+                ", userLevel=" + userLevel +
                 ", roles=" + roles +
                 '}';
     }

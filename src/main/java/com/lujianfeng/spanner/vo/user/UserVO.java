@@ -1,8 +1,11 @@
 package com.lujianfeng.spanner.vo.user;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
 
 /**
  * @author mac
@@ -29,5 +32,16 @@ public class UserVO {
     private String signature;
 
     private Long age;
+
+    private LocalDateTime vipExpireAt;
+
+    @JsonProperty("isVip")
+    private Boolean isVip;
+
+    private Long growthValue;
+
+    private Integer vipLevel;
+
+    private Integer userLevel;
 
 }

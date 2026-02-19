@@ -1,15 +1,21 @@
 package com.lujianfeng.spanner.service.impl;
 
 import com.lujianfeng.spanner.dto.user.UserLoginRequestDTO;
+import com.lujianfeng.spanner.dto.user.UserGrowthChangeRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserRegisterRequestDTO;
 import com.lujianfeng.spanner.dto.user.UserUpdateProfileRequestDTO;
+import com.lujianfeng.spanner.dto.user.VipPurchaseRequestDTO;
+import com.lujianfeng.spanner.event.message.VipOpenedNotifyDomainEvent;
 import com.lujianfeng.spanner.dto.user.WalletTransferAcceptRequestDTO;
+import com.lujianfeng.spanner.entity.user.UserVipOrderEntity;
 import com.lujianfeng.spanner.entity.user.UserEntity;
+import com.lujianfeng.spanner.entity.user.VipPlanType;
 import com.lujianfeng.spanner.entity.user.WalletAccountEntity;
 import com.lujianfeng.spanner.entity.user.WalletFlowEntity;
 import com.lujianfeng.spanner.entity.user.WalletTransferEntity;
 import com.lujianfeng.spanner.mapper.UserMapper;
 import com.lujianfeng.spanner.repository.UserRepository;
+import com.lujianfeng.spanner.repository.UserVipOrderRepository;
 import com.lujianfeng.spanner.repository.WalletAccountRepository;
 import com.lujianfeng.spanner.repository.WalletFlowRepository;
 import com.lujianfeng.spanner.repository.WalletTransferRepository;
@@ -22,6 +28,10 @@ import com.lujianfeng.spanner.dto.user.WalletTransferRequestDTO;
 import com.lujianfeng.spanner.vo.user.LoginVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
 import com.lujianfeng.spanner.vo.user.UserVO;
+import com.lujianfeng.spanner.vo.user.VipOrderItemVO;
+import com.lujianfeng.spanner.vo.user.VipPlanVO;
+import com.lujianfeng.spanner.vo.user.VipProfileVO;
+import com.lujianfeng.spanner.vo.user.VipPurchaseResultVO;
 import com.lujianfeng.spanner.vo.user.WalletAccountVO;
 import com.lujianfeng.spanner.vo.user.WalletChangeResultVO;
 import com.lujianfeng.spanner.vo.user.WalletFlowItemVO;
@@ -32,6 +42,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -41,6 +52,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -61,25 +74,34 @@ public class UserServiceImpl implements UserService {
     private final WalletAccountRepository walletAccountRepository;
     private final WalletFlowRepository walletFlowRepository;
     private final WalletTransferRepository walletTransferRepository;
+    private final UserVipOrderRepository userVipOrderRepository;
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final JwtUtil jwtUtil;
+    private final ApplicationEventPublisher eventPublisher;
+    private static final long[] LEVEL_THRESHOLDS = {
+            0L, 100L, 300L, 700L, 1500L, 3000L, 6000L, 12000L, 25000L, 50000L
+    };
 
 
     public UserServiceImpl(UserRepository userRepository,
                            WalletAccountRepository walletAccountRepository,
                            WalletFlowRepository walletFlowRepository,
                            WalletTransferRepository walletTransferRepository,
+                           UserVipOrderRepository userVipOrderRepository,
                            UserMapper userMapper,
                            BCryptPasswordEncoder bCryptPasswordEncoder,
-                           JwtUtil jwtUtil) {
+                           JwtUtil jwtUtil,
+                           ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.walletAccountRepository = walletAccountRepository;
         this.walletFlowRepository = walletFlowRepository;
         this.walletTransferRepository = walletTransferRepository;
+        this.userVipOrderRepository = userVipOrderRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.userMapper = userMapper;
         this.jwtUtil = jwtUtil;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -93,6 +115,8 @@ public class UserServiceImpl implements UserService {
         log.info("userAccountToString={}", userAccount.toString());
         userEntity.setAccount(userAccount.toString());
         userEntity.setPassword(bCryptPasswordEncoder.encode(userRegisterRequestDTO.getPassword()));
+        userEntity.setGrowthValue(0L);
+        userEntity.setUserLevel(1);
         UserEntity user = userRepository.save(userEntity);
         createWalletIfAbsent(user);
         return userMapper.toUserVO(user);
@@ -472,6 +496,123 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
+    @Override
+    public List<VipPlanVO> listVipPlans() {
+        return Arrays.stream(VipPlanType.values()).map(this::toVipPlanVO).toList();
+    }
+
+    @Override
+    public VipProfileVO getMyVipProfile() {
+        UserEntity user = getCurrentUserEntity();
+        if (user == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        ensureGrowthDefaults(user);
+        return toVipProfileVO(user);
+    }
+
+    @Override
+    @Transactional
+    public VipPurchaseResultVO purchaseVip(VipPurchaseRequestDTO requestDTO) {
+        UserEntity user = getCurrentUserEntity();
+        if (user == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        VipPlanType plan = VipPlanType.fromCode(requestDTO == null ? null : requestDTO.getPlanCode());
+        WalletAccountEntity wallet = getWalletForUpdate(user);
+        validateWalletSecurityPassword(wallet, requestDTO == null ? null : requestDTO.getSecurityPassword());
+
+        BigDecimal beforeBalance = wallet.getBalance();
+        if (beforeBalance.compareTo(plan.getPrice()) < 0) {
+            throw new IllegalArgumentException("钱包余额不足");
+        }
+        BigDecimal afterBalance = beforeBalance.subtract(plan.getPrice()).setScale(2);
+        wallet.setBalance(afterBalance);
+        WalletAccountEntity savedWallet = walletAccountRepository.save(wallet);
+
+        String purchaseNo = resolveVipPurchaseNo(requestDTO);
+        if (userVipOrderRepository.findByPurchaseNo(purchaseNo) != null) {
+            throw new IllegalArgumentException("purchaseNo 已存在");
+        }
+        saveWalletFlow(savedWallet, "VIP_PURCHASE", purchaseNo, plan.getPrice(), beforeBalance, afterBalance, plan.getPlanName());
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime base = user.getVipExpireAt() != null && user.getVipExpireAt().isAfter(now) ? user.getVipExpireAt() : now;
+        LocalDateTime endAt = base.plusMonths(plan.getMonths());
+        user.setVipExpireAt(endAt);
+        increaseGrowthForUser(user, plan.getGrowthBonus());
+        UserEntity savedUser = userRepository.save(user);
+
+        UserVipOrderEntity order = new UserVipOrderEntity();
+        order.setUserId(savedUser.getId());
+        order.setPurchaseNo(purchaseNo);
+        order.setPlanCode(plan.getCode());
+        order.setPlanName(plan.getPlanName());
+        order.setAmount(plan.getPrice());
+        order.setMonths(plan.getMonths());
+        order.setGrowthBonus(plan.getGrowthBonus());
+        order.setStartAt(base);
+        order.setEndAt(endAt);
+        order.setStatus("SUCCESS");
+        userVipOrderRepository.save(order);
+        eventPublisher.publishEvent(new VipOpenedNotifyDomainEvent(
+                savedUser.getAccount(),
+                buildVipOpenedNotifyContent(plan, endAt, savedUser.getUserLevel())
+        ));
+
+        VipPurchaseResultVO vo = new VipPurchaseResultVO();
+        vo.setPurchaseNo(purchaseNo);
+        vo.setPlanCode(plan.getCode());
+        vo.setPlanName(plan.getPlanName());
+        vo.setAmount(plan.getPrice());
+        vo.setStartAt(base);
+        vo.setEndAt(endAt);
+        vo.setVipActive(Boolean.TRUE);
+        vo.setVipExpireAt(savedUser.getVipExpireAt());
+        vo.setGrowthValue(savedUser.getGrowthValue());
+        vo.setUserLevel(savedUser.getUserLevel());
+        return vo;
+    }
+
+    @Override
+    @Transactional
+    public VipProfileVO addMyGrowth(UserGrowthChangeRequestDTO requestDTO) {
+        UserEntity user = getCurrentUserEntity();
+        if (user == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        if (requestDTO == null || requestDTO.getGrowthValue() == null) {
+            throw new IllegalArgumentException("growthValue 不能为空");
+        }
+        if (requestDTO.getGrowthValue() <= 0) {
+            throw new IllegalArgumentException("growthValue 必须大于 0");
+        }
+        increaseGrowthForUser(user, requestDTO.getGrowthValue());
+        UserEntity saved = userRepository.save(user);
+        return toVipProfileVO(saved);
+    }
+
+    @Override
+    public PageResultVO<VipOrderItemVO> listMyVipOrders(Integer page, Integer size) {
+        UserEntity user = getCurrentUserEntity();
+        if (user == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedSize);
+        Page<UserVipOrderEntity> resultPage = userVipOrderRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable);
+        List<VipOrderItemVO> records = resultPage.getContent().stream().map(this::toVipOrderItemVO).toList();
+        return PageResultVO.<VipOrderItemVO>builder()
+                .records(records)
+                .page(normalizedPage)
+                .size(normalizedSize)
+                .total(resultPage.getTotalElements())
+                .totalPages(resultPage.getTotalPages())
+                .hasMore(normalizedPage < resultPage.getTotalPages())
+                .build();
+    }
+
     private WalletChangeResultVO buildWalletChangeResult(String changeType,
                                                          String businessNo,
                                                          WalletAmountChangeRequestDTO requestDTO,
@@ -537,8 +678,9 @@ public class UserServiceImpl implements UserService {
         if (!"RECHARGE".equals(normalized)
                 && !"CONSUME".equals(normalized)
                 && !"TRANSFER_OUT".equals(normalized)
-                && !"TRANSFER_IN".equals(normalized)) {
-            throw new IllegalArgumentException("changeType 仅支持 RECHARGE/CONSUME/TRANSFER_OUT/TRANSFER_IN");
+                && !"TRANSFER_IN".equals(normalized)
+                && !"VIP_PURCHASE".equals(normalized)) {
+            throw new IllegalArgumentException("changeType 仅支持 RECHARGE/CONSUME/TRANSFER_OUT/TRANSFER_IN/VIP_PURCHASE");
         }
         return normalized;
     }
@@ -667,5 +809,102 @@ public class UserServiceImpl implements UserService {
         vo.setRemark(flow.getRemark());
         vo.setCreatedAt(flow.getCreatedAt());
         return vo;
+    }
+
+    private String resolveVipPurchaseNo(VipPurchaseRequestDTO requestDTO) {
+        if (requestDTO != null && requestDTO.getPurchaseNo() != null && !requestDTO.getPurchaseNo().isBlank()) {
+            return requestDTO.getPurchaseNo().trim();
+        }
+        return "VIP-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+    }
+
+    private VipPlanVO toVipPlanVO(VipPlanType planType) {
+        VipPlanVO vo = new VipPlanVO();
+        vo.setPlanCode(planType.getCode());
+        vo.setPlanName(planType.getPlanName());
+        vo.setPrice(planType.getPrice());
+        vo.setMonths(planType.getMonths());
+        vo.setGrowthBonus(planType.getGrowthBonus());
+        return vo;
+    }
+
+    private VipProfileVO toVipProfileVO(UserEntity user) {
+        VipProfileVO vo = new VipProfileVO();
+        ensureGrowthDefaults(user);
+        vo.setVipExpireAt(user.getVipExpireAt());
+        vo.setVipActive(user.getVipExpireAt() != null && user.getVipExpireAt().isAfter(LocalDateTime.now()));
+        vo.setGrowthValue(user.getGrowthValue());
+        vo.setUserLevel(user.getUserLevel());
+        vo.setNextLevelGrowth(resolveNextLevelGrowth(user.getGrowthValue()));
+        return vo;
+    }
+
+    private VipOrderItemVO toVipOrderItemVO(UserVipOrderEntity order) {
+        VipOrderItemVO vo = new VipOrderItemVO();
+        vo.setPurchaseNo(order.getPurchaseNo());
+        vo.setPlanCode(order.getPlanCode());
+        vo.setPlanName(order.getPlanName());
+        vo.setAmount(order.getAmount());
+        vo.setMonths(order.getMonths());
+        vo.setGrowthBonus(order.getGrowthBonus());
+        vo.setStartAt(order.getStartAt());
+        vo.setEndAt(order.getEndAt());
+        vo.setStatus(order.getStatus());
+        vo.setCreatedAt(order.getCreatedAt());
+        return vo;
+    }
+
+    private void increaseGrowthForUser(UserEntity user, Long deltaGrowth) {
+        ensureGrowthDefaults(user);
+        long newGrowth = user.getGrowthValue() + deltaGrowth;
+        user.setGrowthValue(newGrowth);
+        user.setUserLevel(resolveLevelByGrowth(newGrowth));
+    }
+
+    private void ensureGrowthDefaults(UserEntity user) {
+        if (user.getGrowthValue() == null) {
+            user.setGrowthValue(0L);
+        }
+        if (user.getUserLevel() == null || user.getUserLevel() < 1) {
+            user.setUserLevel(1);
+        }
+    }
+
+    private int resolveLevelByGrowth(Long growthValue) {
+        long growth = growthValue == null ? 0L : growthValue;
+        int level = 1;
+        for (int i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+            if (growth >= LEVEL_THRESHOLDS[i]) {
+                level = i + 1;
+            } else {
+                break;
+            }
+        }
+        return level;
+    }
+
+    private Long resolveNextLevelGrowth(Long growthValue) {
+        long growth = growthValue == null ? 0L : growthValue;
+        for (long threshold : LEVEL_THRESHOLDS) {
+            if (threshold > growth) {
+                return threshold;
+            }
+        }
+        return null;
+    }
+
+    private String buildVipOpenedNotifyContent(VipPlanType plan,
+                                               LocalDateTime vipExpireAt,
+                                               Integer userLevel) {
+        String expireAt = vipExpireAt == null
+                ? "-"
+                : vipExpireAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        return String.format(
+                "VIP开通成功：%s，到账成长值%d，当前等级Lv.%d，会员有效期至%s。",
+                plan.getPlanName(),
+                plan.getGrowthBonus(),
+                userLevel == null ? 1 : userLevel,
+                expireAt
+        );
     }
 }

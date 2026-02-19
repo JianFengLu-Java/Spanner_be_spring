@@ -41,6 +41,24 @@ public class ChatGroupEntity {
     @Column(length = 1000)
     private String announcement;
 
+    @Column(name = "group_avatar_url", length = 500)
+    private String groupAvatarUrl;
+
+    @Column(length = 500)
+    private String summary;
+
+    @Column(name = "invite_mode", nullable = false, length = 32)
+    private String inviteMode;
+
+    @Column(name = "member_can_edit_group_name", nullable = false)
+    private Boolean memberCanEditGroupName;
+
+    @Column(name = "join_verification_enabled", nullable = false)
+    private Boolean joinVerificationEnabled;
+
+    @Column(name = "announcement_permission", nullable = false, length = 32)
+    private String announcementPermission;
+
     @Column(name = "max_members", nullable = false)
     private Integer maxMembers;
 
@@ -61,6 +79,18 @@ public class ChatGroupEntity {
         }
         if (maxMembers == null || maxMembers < 1) {
             maxMembers = 500;
+        }
+        if (inviteMode == null || inviteMode.isBlank()) {
+            inviteMode = GroupInviteModeEnum.ADMIN_ONLY.name();
+        }
+        if (memberCanEditGroupName == null) {
+            memberCanEditGroupName = false;
+        }
+        if (joinVerificationEnabled == null) {
+            joinVerificationEnabled = true;
+        }
+        if (announcementPermission == null || announcementPermission.isBlank()) {
+            announcementPermission = GroupAnnouncementPermissionEnum.OWNER_ADMIN.name();
         }
     }
 

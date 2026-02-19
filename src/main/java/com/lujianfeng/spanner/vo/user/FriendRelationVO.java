@@ -1,5 +1,6 @@
 package com.lujianfeng.spanner.vo.user;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.lujianfeng.spanner.entity.user.UserRelationEnum;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +23,10 @@ public class FriendRelationVO {
     private String gender;
     private String signature;
     private Long age;
+    @JsonProperty("isVip")
+    private Boolean isVip;
+    private Long growthValue;
+    private Integer vipLevel;
     private UserRelationEnum relationType;
     private String verificationMessage;
     private LocalDateTime createTime;
