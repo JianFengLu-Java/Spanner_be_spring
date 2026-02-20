@@ -1,11 +1,22 @@
 package com.lujianfeng.spanner.service;
 
 import com.lujianfeng.spanner.dto.cloud.CloudDocSaveRequestDTO;
+import com.lujianfeng.spanner.dto.cloud.CloudDocShareCreateRequestDTO;
 import com.lujianfeng.spanner.entity.cloud.CloudDocEntity;
+import com.lujianfeng.spanner.entity.cloud.CloudDocShareEntity;
 import com.lujianfeng.spanner.entity.user.UserEntity;
+import com.lujianfeng.spanner.entity.user.UserRelation;
+import com.lujianfeng.spanner.entity.user.UserRelationEnum;
 import com.lujianfeng.spanner.repository.CloudDocRepository;
+import com.lujianfeng.spanner.repository.CloudDocShareRepository;
+import com.lujianfeng.spanner.repository.UserRelationRepository;
+import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.vo.cloud.CloudDocDetailVO;
 import com.lujianfeng.spanner.vo.cloud.CloudDocSaveResponseVO;
+import com.lujianfeng.spanner.vo.cloud.CloudDocShareCreateResultVO;
+import com.lujianfeng.spanner.vo.cloud.CloudDocShareRevokeResultVO;
+import com.lujianfeng.spanner.vo.cloud.CloudDocShareViewVO;
+import com.lujianfeng.spanner.vo.cloud.CloudDocReceivedShareItemVO;
 import com.lujianfeng.spanner.vo.cloud.CloudDocSummaryVO;
 import com.lujianfeng.spanner.vo.user.PageResultVO;
 import org.springframework.data.domain.Page;
@@ -19,7 +30,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -29,11 +43,24 @@ public class CloudDocService {
     private static final String DEFAULT_TITLE = "未标题云文档";
     private static final String DEFAULT_CONTENT_JSON = "{\"type\":\"doc\",\"content\":[]}";
     private static final DateTimeFormatter ID_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final String SHARE_MODE_READONLY = "READONLY";
+    private static final String SHARE_MODE_COLLAB = "COLLAB";
+    private static final int DEFAULT_SHARE_EXPIRE_HOURS = 24 * 7;
+    private static final int MAX_SHARE_EXPIRE_HOURS = 24 * 30;
 
     private final CloudDocRepository cloudDocRepository;
+    private final CloudDocShareRepository cloudDocShareRepository;
+    private final UserRepository userRepository;
+    private final UserRelationRepository userRelationRepository;
 
-    public CloudDocService(CloudDocRepository cloudDocRepository) {
+    public CloudDocService(CloudDocRepository cloudDocRepository,
+                           CloudDocShareRepository cloudDocShareRepository,
+                           UserRepository userRepository,
+                           UserRelationRepository userRelationRepository) {
         this.cloudDocRepository = cloudDocRepository;
+        this.cloudDocShareRepository = cloudDocShareRepository;
+        this.userRepository = userRepository;
+        this.userRelationRepository = userRelationRepository;
     }
 
     public PageResultVO<CloudDocSummaryVO> listMyDocs(UserEntity currentUser,
@@ -89,9 +116,14 @@ public class CloudDocService {
     public CloudDocDetailVO getDocDetail(UserEntity currentUser, String docIdRaw) {
         String account = requireAccount(currentUser);
         String docId = normalizeDocId(docIdRaw);
-        CloudDocEntity doc = cloudDocRepository.findByDocIdAndOwnerAccountAndDeletedFalse(docId, account)
+        CloudDocEntity doc = cloudDocRepository.findByDocIdAndDeletedFalse(docId)
                 .orElseThrow(() -> new IllegalStateException("文档不存在"));
-        return toDetailVO(doc, account);
+        boolean editable = canEditDoc(account, doc);
+        boolean readable = editable || hasReadableShare(account, docId);
+        if (!readable) {
+            throw new IllegalStateException("文档不存在");
+        }
+        return toDetailVO(doc, account, editable);
     }
 
     @Transactional
@@ -105,8 +137,11 @@ public class CloudDocService {
             throw new IllegalArgumentException("baseVersion 非法");
         }
 
-        CloudDocEntity doc = cloudDocRepository.findByDocIdAndOwnerAccountAndDeletedFalse(docId, account)
+        CloudDocEntity doc = cloudDocRepository.findByDocIdAndDeletedFalse(docId)
                 .orElseThrow(() -> new IllegalStateException("文档不存在"));
+        if (!canEditDoc(account, doc)) {
+            throw new IllegalStateException("无权限编辑该文档");
+        }
 
         if (!Objects.equals(requestDTO.getBaseVersion(), doc.getVersion())) {
             throw new CloudDocVersionConflictException(doc.getVersion(), doc.getUpdatedAt());
@@ -152,6 +187,174 @@ public class CloudDocService {
         cloudDocRepository.save(doc);
     }
 
+    @Transactional
+    public CloudDocShareCreateResultVO shareDocToFriend(UserEntity currentUser,
+                                                        String docIdRaw,
+                                                        CloudDocShareCreateRequestDTO requestDTO) {
+        String account = requireAccount(currentUser);
+        String docId = normalizeDocId(docIdRaw);
+        if (requestDTO == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        String friendAccount = trim(requestDTO.getFriendAccount());
+        if (friendAccount == null) {
+            throw new IllegalArgumentException("friendAccount 不能为空");
+        }
+        if (account.equals(friendAccount)) {
+            throw new IllegalArgumentException("不能分享给自己");
+        }
+
+        CloudDocEntity doc = cloudDocRepository.findByDocIdAndOwnerAccountAndDeletedFalse(docId, account)
+                .orElseThrow(() -> new IllegalStateException("文档不存在"));
+
+        UserEntity ownerUser = userRepository.findByAccount(account);
+        UserEntity friendUser = userRepository.findByAccount(friendAccount);
+        if (ownerUser == null || friendUser == null) {
+            throw new IllegalArgumentException("好友账号不存在");
+        }
+        if (!isFriendAccepted(ownerUser, friendUser)) {
+            throw new IllegalStateException("仅支持分享给好友");
+        }
+
+        int expireHours = normalizeExpireHours(requestDTO.getExpireHours());
+        String shareMode = normalizeShareMode(requestDTO.getShareMode());
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expireAt = now.plusHours(expireHours);
+
+        CloudDocShareEntity share = new CloudDocShareEntity();
+        share.setShareNo(generateShareNo());
+        share.setDocId(doc.getDocId());
+        share.setOwnerAccount(account);
+        share.setFriendAccount(friendAccount);
+        share.setStatus("ACTIVE");
+        share.setShareMode(shareMode);
+        share.setExpireAt(expireAt);
+        share.setCreatedAt(now);
+        share.setUpdatedAt(now);
+
+        CloudDocShareEntity saved = cloudDocShareRepository.save(share);
+
+        return CloudDocShareCreateResultVO.builder()
+                .shareNo(saved.getShareNo())
+                .docId(saved.getDocId())
+                .friendAccount(saved.getFriendAccount())
+                .shareMode(normalizeShareModeForOutput(saved.getShareMode()))
+                .createdAt(formatUtc(saved.getCreatedAt()))
+                .expireAt(formatUtc(saved.getExpireAt()))
+                .sharePath("/cloud-docs/shares/" + saved.getShareNo())
+                .build();
+    }
+
+    @Transactional
+    public CloudDocShareViewVO getSharedDoc(UserEntity currentUser, String shareNoRaw) {
+        String account = requireAccount(currentUser);
+        String shareNo = normalizeShareNo(shareNoRaw);
+        CloudDocShareEntity share = cloudDocShareRepository.findByShareNo(shareNo)
+                .orElseThrow(() -> new IllegalStateException("分享不存在"));
+
+        if (!"ACTIVE".equalsIgnoreCase(share.getStatus())) {
+            throw new IllegalStateException("分享已失效");
+        }
+        if (!(account.equals(share.getFriendAccount()) || account.equals(share.getOwnerAccount()))) {
+            throw new IllegalStateException("无权限查看该分享");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (share.getExpireAt() != null && now.isAfter(share.getExpireAt())) {
+            throw new IllegalStateException("分享已过期");
+        }
+
+        CloudDocEntity doc = cloudDocRepository.findByDocIdAndDeletedFalse(share.getDocId())
+                .orElseThrow(() -> new IllegalStateException("文档不存在"));
+
+        if (account.equals(share.getFriendAccount())) {
+            share.setLastViewedAt(now);
+            cloudDocShareRepository.save(share);
+        }
+
+        String shareMode = normalizeShareModeForOutput(share.getShareMode());
+        boolean collab = SHARE_MODE_COLLAB.equalsIgnoreCase(shareMode);
+        CloudDocDetailVO docDetail = CloudDocDetailVO.builder()
+                .id(doc.getDocId())
+                .title(doc.getTitle())
+                .contentHtml(doc.getContentHtml())
+                .contentJson(doc.getContentJson())
+                .createdAt(formatUtc(doc.getCreatedAt()))
+                .updatedAt(formatUtc(doc.getUpdatedAt()))
+                .lastSavedAt(formatUtc(doc.getLastSavedAt()))
+                .version(doc.getVersion())
+                .ownerAccount(doc.getOwnerAccount())
+                .editable(account.equals(doc.getOwnerAccount()) || (account.equals(share.getFriendAccount()) && collab))
+                .build();
+
+        return CloudDocShareViewVO.builder()
+                .shareNo(share.getShareNo())
+                .shareMode(shareMode)
+                .collaborative(collab)
+                .doc(docDetail)
+                .build();
+    }
+
+    @Transactional
+    public CloudDocShareRevokeResultVO revokeShare(UserEntity currentUser, String shareNoRaw) {
+        String account = requireAccount(currentUser);
+        String shareNo = normalizeShareNo(shareNoRaw);
+        CloudDocShareEntity share = cloudDocShareRepository.findByShareNoAndOwnerAccount(shareNo, account)
+                .orElseThrow(() -> new IllegalStateException("分享不存在"));
+
+        LocalDateTime now = LocalDateTime.now();
+        if (!"REVOKED".equalsIgnoreCase(share.getStatus())) {
+            share.setStatus("REVOKED");
+            share.setUpdatedAt(now);
+            cloudDocShareRepository.save(share);
+        }
+
+        return CloudDocShareRevokeResultVO.builder()
+                .shareNo(share.getShareNo())
+                .revoked(true)
+                .revokedAt(formatUtc(now))
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResultVO<CloudDocReceivedShareItemVO> listReceivedShares(UserEntity currentUser,
+                                                                        Integer page,
+                                                                        Integer size,
+                                                                        String statusRaw) {
+        String account = requireAccount(currentUser);
+        int safePage = page == null || page < 1 ? 1 : page;
+        int safeSize = size == null || size < 1 ? 20 : Math.min(size, 100);
+        String statusFilter = normalizeShareStatus(statusRaw);
+
+        List<CloudDocShareEntity> shares = cloudDocShareRepository.findByFriendAccountOrderByCreatedAtDesc(account);
+        List<String> docIds = shares.stream().map(CloudDocShareEntity::getDocId).distinct().toList();
+        Map<String, CloudDocEntity> docById = new HashMap<>();
+        if (!docIds.isEmpty()) {
+            cloudDocRepository.findByDocIdInAndDeletedFalse(docIds).forEach(doc -> docById.put(doc.getDocId(), doc));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<CloudDocReceivedShareItemVO> records = shares.stream()
+                .map(share -> toReceivedShareItem(share, docById.get(share.getDocId()), now))
+                .filter(item -> statusFilter == null || statusFilter.equalsIgnoreCase(item.getStatus()))
+                .toList();
+
+        int total = records.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        int fromIndex = Math.min((safePage - 1) * safeSize, total);
+        int toIndex = Math.min(fromIndex + safeSize, total);
+        List<CloudDocReceivedShareItemVO> pageRecords = records.subList(fromIndex, toIndex);
+
+        return PageResultVO.<CloudDocReceivedShareItemVO>builder()
+                .records(pageRecords)
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
+                .totalPages(totalPages)
+                .hasMore(safePage < totalPages)
+                .build();
+    }
+
     private CloudDocSummaryVO toSummaryVO(CloudDocEntity doc) {
         return CloudDocSummaryVO.builder()
                 .id(doc.getDocId())
@@ -165,7 +368,31 @@ public class CloudDocService {
                 .build();
     }
 
+    private CloudDocReceivedShareItemVO toReceivedShareItem(CloudDocShareEntity share,
+                                                            CloudDocEntity doc,
+                                                            LocalDateTime now) {
+        boolean expired = isShareExpired(share, now);
+        String status = resolveShareStatus(share, expired);
+        return CloudDocReceivedShareItemVO.builder()
+                .shareNo(share.getShareNo())
+                .docId(share.getDocId())
+                .title(doc == null ? "文档不存在或已删除" : doc.getTitle())
+                .snippet(doc == null ? "" : doc.getSnippet())
+                .ownerAccount(share.getOwnerAccount())
+                .shareMode(normalizeShareModeForOutput(share.getShareMode()))
+                .status(status)
+                .expired(expired)
+                .createdAt(formatUtc(share.getCreatedAt()))
+                .expireAt(formatUtc(share.getExpireAt()))
+                .lastViewedAt(formatUtc(share.getLastViewedAt()))
+                .build();
+    }
+
     private CloudDocDetailVO toDetailVO(CloudDocEntity doc, String account) {
+        return toDetailVO(doc, account, account.equals(doc.getOwnerAccount()) && !Boolean.TRUE.equals(doc.getDeleted()));
+    }
+
+    private CloudDocDetailVO toDetailVO(CloudDocEntity doc, String account, boolean editable) {
         return CloudDocDetailVO.builder()
                 .id(doc.getDocId())
                 .title(doc.getTitle())
@@ -176,7 +403,7 @@ public class CloudDocService {
                 .lastSavedAt(formatUtc(doc.getLastSavedAt()))
                 .version(doc.getVersion())
                 .ownerAccount(doc.getOwnerAccount())
-                .editable(account.equals(doc.getOwnerAccount()) && !Boolean.TRUE.equals(doc.getDeleted()))
+                .editable(editable)
                 .build();
     }
 
@@ -263,6 +490,89 @@ public class CloudDocService {
         throw new IllegalArgumentException("sort 参数非法");
     }
 
+    private boolean isFriendAccepted(UserEntity ownerUser, UserEntity friendUser) {
+        return userRelationRepository.findPairRelations(ownerUser, friendUser).stream()
+                .map(UserRelation::getRelationType)
+                .anyMatch(type -> type == UserRelationEnum.ACCEPTED);
+    }
+
+    private int normalizeExpireHours(Integer expireHours) {
+        if (expireHours == null) {
+            return DEFAULT_SHARE_EXPIRE_HOURS;
+        }
+        if (expireHours < 1 || expireHours > MAX_SHARE_EXPIRE_HOURS) {
+            throw new IllegalArgumentException("expireHours 范围必须在 1-720 之间");
+        }
+        return expireHours;
+    }
+
+    private String normalizeShareMode(String shareModeRaw) {
+        String shareMode = trim(shareModeRaw);
+        if (shareMode == null) {
+            return SHARE_MODE_READONLY;
+        }
+        String normalized = shareMode.toUpperCase(Locale.ROOT);
+        if (!SHARE_MODE_READONLY.equals(normalized) && !SHARE_MODE_COLLAB.equals(normalized)) {
+            throw new IllegalArgumentException("shareMode 仅支持 READONLY/COLLAB");
+        }
+        return normalized;
+    }
+
+    private String normalizeShareModeForOutput(String shareModeRaw) {
+        if (shareModeRaw == null || shareModeRaw.isBlank()) {
+            return SHARE_MODE_READONLY;
+        }
+        String normalized = shareModeRaw.toUpperCase(Locale.ROOT);
+        if (SHARE_MODE_COLLAB.equals(normalized)) {
+            return SHARE_MODE_COLLAB;
+        }
+        return SHARE_MODE_READONLY;
+    }
+
+    private boolean canEditDoc(String account, CloudDocEntity doc) {
+        if (account.equals(doc.getOwnerAccount())) {
+            return true;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return cloudDocShareRepository
+                .findByDocIdAndFriendAccountAndStatusAndShareMode(doc.getDocId(), account, "ACTIVE", SHARE_MODE_COLLAB)
+                .stream()
+                .anyMatch(share -> share.getExpireAt() == null || now.isBefore(share.getExpireAt()));
+    }
+
+    private boolean hasReadableShare(String account, String docId) {
+        LocalDateTime now = LocalDateTime.now();
+        return cloudDocShareRepository.findByDocIdAndFriendAccountAndStatus(docId, account, "ACTIVE")
+                .stream()
+                .anyMatch(share -> share.getExpireAt() == null || now.isBefore(share.getExpireAt()));
+    }
+
+    private String normalizeShareStatus(String statusRaw) {
+        String status = trim(statusRaw);
+        if (status == null) {
+            return null;
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        if (!"ACTIVE".equals(normalized) && !"EXPIRED".equals(normalized) && !"REVOKED".equals(normalized)) {
+            throw new IllegalArgumentException("status 仅支持 ACTIVE/EXPIRED/REVOKED");
+        }
+        return normalized;
+    }
+
+    private boolean isShareExpired(CloudDocShareEntity share, LocalDateTime now) {
+        return share.getExpireAt() != null && now.isAfter(share.getExpireAt());
+    }
+
+    private String resolveShareStatus(CloudDocShareEntity share, boolean expired) {
+        if ("REVOKED".equalsIgnoreCase(share.getStatus())) {
+            return "REVOKED";
+        }
+        if (expired) {
+            return "EXPIRED";
+        }
+        return "ACTIVE";
+    }
+
     private String generateDocId() {
         String day = LocalDateTime.now().format(ID_DATE_FORMAT);
         for (int i = 0; i < 5; i++) {
@@ -273,6 +583,18 @@ public class CloudDocService {
             }
         }
         return "doc_" + day + "_" + UUID.randomUUID().toString().replace("-", "").toLowerCase(Locale.ROOT);
+    }
+
+    private String generateShareNo() {
+        String day = LocalDateTime.now().format(ID_DATE_FORMAT);
+        for (int i = 0; i < 5; i++) {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toLowerCase(Locale.ROOT);
+            String shareNo = "share_" + day + "_" + suffix;
+            if (!cloudDocShareRepository.existsByShareNo(shareNo)) {
+                return shareNo;
+            }
+        }
+        return "share_" + day + "_" + UUID.randomUUID().toString().replace("-", "").toLowerCase(Locale.ROOT);
     }
 
     private String formatUtc(LocalDateTime time) {
@@ -291,5 +613,13 @@ public class CloudDocService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeShareNo(String shareNoRaw) {
+        String shareNo = trim(shareNoRaw);
+        if (shareNo == null) {
+            throw new IllegalArgumentException("shareNo 不能为空");
+        }
+        return shareNo;
     }
 }

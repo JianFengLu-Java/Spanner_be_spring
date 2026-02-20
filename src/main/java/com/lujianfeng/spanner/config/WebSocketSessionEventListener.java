@@ -1,4 +1,5 @@
 package com.lujianfeng.spanner.config;
+import com.lujianfeng.spanner.service.CloudDocCollabWsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -14,6 +15,11 @@ import java.security.Principal;
 @Component
 public class WebSocketSessionEventListener {
     private static final Logger log = LoggerFactory.getLogger(WebSocketSessionEventListener.class);
+    private final CloudDocCollabWsService cloudDocCollabWsService;
+
+    public WebSocketSessionEventListener(CloudDocCollabWsService cloudDocCollabWsService) {
+        this.cloudDocCollabWsService = cloudDocCollabWsService;
+    }
 
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectEvent event) {
@@ -30,6 +36,7 @@ public class WebSocketSessionEventListener {
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         Principal user = accessor.getUser();
+        cloudDocCollabWsService.handleDisconnect(accessor.getSessionId());
         log.info("WebSocket disconnected, sessionId={}, user={}",
                 accessor.getSessionId(),
                 user == null ? "anonymous" : user.getName());

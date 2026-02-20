@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 public interface CloudDocRepository extends JpaRepository<CloudDocEntity, Long> {
@@ -18,6 +19,8 @@ public interface CloudDocRepository extends JpaRepository<CloudDocEntity, Long> 
     Page<CloudDocEntity> findByOwnerAccountAndDeletedFalseAndTitleContainingIgnoreCase(String ownerAccount,
                                                                                          String keyword,
                                                                                          Pageable pageable);
+
+    java.util.List<CloudDocEntity> findByDocIdInAndDeletedFalse(Collection<String> docIds);
 
     boolean existsByDocId(String docId);
 }

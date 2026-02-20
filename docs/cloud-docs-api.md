@@ -157,11 +157,147 @@
 - `GET /cloud-docs/{docId}/revisions`：历史版本列表
 - `POST /cloud-docs/{docId}/restore`：按版本回滚
 - `POST /cloud-docs/{docId}/duplicate`：复制文档
-- `POST /cloud-docs/{docId}/share`：生成分享链接
+- `POST /cloud-docs/{docId}/share`：分享给好友查看（已实现）
+- `GET /cloud-docs/shares/{shareNo}`：通过分享号查看文档（已实现）
+- `DELETE /cloud-docs/shares/{shareNo}`：撤销分享（已实现）
+- `GET /cloud-docs/shares/received`：我收到的分享列表（已实现）
+
+### 4.1 分享给好友查看
+- 方法：`POST /cloud-docs/{docId}/share`
+- 请求体：
+```json
+{
+  "friendAccount": "10002",
+  "expireHours": 168,
+  "shareMode": "READONLY"
+}
+```
+- 规则：
+- 仅文档 owner 可分享。
+- 仅可分享给好友关系为 `ACCEPTED` 的用户。
+- `expireHours` 可选，范围 `1~720`，默认 `168`（7 天）。
+- `shareMode` 可选：`READONLY | COLLAB`，默认 `READONLY`。
+- 只有 `COLLAB` 分享允许接入 WS 协作协议。
+- 成功响应（200）：
+```json
+{
+  "code": 200,
+  "status": "success",
+  "message": "分享云文档成功",
+  "data": {
+    "shareNo": "share_20260220_abc123def0",
+    "docId": "doc_20260220_000001",
+    "friendAccount": "10002",
+    "shareMode": "READONLY",
+    "createdAt": "2026-02-20T12:00:00Z",
+    "expireAt": "2026-02-27T12:00:00Z",
+    "sharePath": "/cloud-docs/shares/share_20260220_abc123def0"
+  }
+}
+```
+
+### 4.2 查看分享文档
+- 方法：`GET /cloud-docs/shares/{shareNo}`
+- 规则：
+- 仅分享接收方（`friendAccount`）和分享发起人（`ownerAccount`）可查看。
+- `READONLY` 分享：接收方只读（`editable=false`）。
+- `COLLAB` 分享：接收方可编辑（`editable=true`），并可接入 WS 协作。
+- 成功响应（200）：
+```json
+{
+  "code": 200,
+  "status": "success",
+  "message": "查询分享文档成功",
+  "data": {
+    "shareNo": "share_20260220_abc123def0",
+    "shareMode": "COLLAB",
+    "collaborative": true,
+    "doc": {
+      "id": "doc_20260220_000001",
+      "title": "需求评审记录",
+      "contentHtml": "<p>文档内容</p>",
+      "contentJson": "{\"type\":\"doc\",\"content\":[]}",
+      "createdAt": "2026-02-20T09:30:00Z",
+      "updatedAt": "2026-02-20T10:30:00Z",
+      "lastSavedAt": "2026-02-20T10:30:00Z",
+      "version": 8,
+      "ownerAccount": "10001",
+      "editable": true
+    }
+  }
+}
+```
+
+### 4.5 分享模式权限矩阵
+- `READONLY`：
+- 可查看：是
+- 可调用 `PUT /cloud-docs/{docId}` 编辑：否
+- 可接入 `/app/cloud-docs.*` 协作 WS：否
+- `COLLAB`：
+- 可查看：是
+- 可调用 `PUT /cloud-docs/{docId}` 编辑：是
+- 可接入 `/app/cloud-docs.*` 协作 WS：是
+
+### 4.3 撤销分享
+- 方法：`DELETE /cloud-docs/shares/{shareNo}`
+- 规则：
+- 仅分享发起人（`ownerAccount`）可撤销。
+- 已撤销分享重复操作返回成功（幂等）。
+- 成功响应（200）：
+```json
+{
+  "code": 200,
+  "status": "success",
+  "message": "撤销分享成功",
+  "data": {
+    "shareNo": "share_20260220_abc123def0",
+    "revoked": true,
+    "revokedAt": "2026-02-20T12:30:00Z"
+  }
+}
+```
+
+### 4.4 我收到的分享列表
+- 方法：`GET /cloud-docs/shares/received?page=1&size=20&status=ACTIVE`
+- Query：
+- `page` 默认 `1`
+- `size` 默认 `20`，最大 `100`
+- `status` 可选：`ACTIVE | EXPIRED | REVOKED`
+- 成功响应（200）：
+```json
+{
+  "code": 200,
+  "status": "success",
+  "message": "查询我收到的分享成功",
+  "data": {
+    "records": [
+      {
+        "shareNo": "share_20260220_abc123def0",
+        "docId": "doc_20260220_000001",
+        "title": "需求评审记录",
+        "snippet": "这里是摘要",
+        "ownerAccount": "10001",
+        "shareMode": "READONLY",
+        "status": "ACTIVE",
+        "expired": false,
+        "createdAt": "2026-02-20T12:00:00Z",
+        "expireAt": "2026-02-27T12:00:00Z",
+        "lastViewedAt": "2026-02-20T12:10:00Z"
+      }
+    ],
+    "page": 1,
+    "size": 20,
+    "total": 1,
+    "totalPages": 1,
+    "hasMore": false
+  }
+}
+```
 
 ## 5. P2 接口（协作扩展）
 - `GET /cloud-docs/{docId}/presence`：在线成员与游标
-- `WS /ws/cloud-docs/{docId}`：协作事件推送（内容变更/游标/在线状态）
+- `WS /ws` + STOMP：协作事件推送（内容变更/游标/在线状态，已实现）
+- 详细协议见：`/Users/luzhouyue/Documents/GitHub/Spanner_be_spring/docs/websocket-cloud-docs-api.md`
 
 ## 6. 错误码
 - `400 + CLOUD_DOC_INVALID_PARAM`：参数非法

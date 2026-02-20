@@ -2,6 +2,7 @@ package com.lujianfeng.spanner.controller;
 
 import com.lujianfeng.spanner.dto.cloud.CloudDocCreateRequestDTO;
 import com.lujianfeng.spanner.dto.cloud.CloudDocSaveRequestDTO;
+import com.lujianfeng.spanner.dto.cloud.CloudDocShareCreateRequestDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.service.CloudDocService;
 import com.lujianfeng.spanner.service.CloudDocVersionConflictException;
@@ -81,6 +82,9 @@ public class CloudDocController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
         } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("无权限")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(403, e.getMessage(), "CLOUD_DOC_FORBIDDEN"));
+            }
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(404, e.getMessage(), "CLOUD_DOC_NOT_FOUND"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
@@ -108,6 +112,9 @@ public class CloudDocController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
         } catch (IllegalStateException e) {
+            if (e.getMessage() != null && e.getMessage().contains("无权限")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(403, e.getMessage(), "CLOUD_DOC_FORBIDDEN"));
+            }
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(404, e.getMessage(), "CLOUD_DOC_NOT_FOUND"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
@@ -123,6 +130,75 @@ public class CloudDocController {
         try {
             cloudDocService.deleteDoc(currentUser, docId);
             return ResponseEntity.ok(success("删除云文档成功", Map.of()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
+        }
+    }
+
+    @PostMapping("/{docId}/share")
+    public ResponseEntity<Map<String, Object>> share(@PathVariable String docId,
+                                                     @RequestBody CloudDocShareCreateRequestDTO requestDTO) {
+        UserEntity currentUser = userService.getCurrentUserEntity();
+        if (currentUser == null) {
+            return unauthorized();
+        }
+        try {
+            return ResponseEntity.ok(success("分享云文档成功", cloudDocService.shareDocToFriend(currentUser, docId, requestDTO)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
+        } catch (IllegalStateException e) {
+            return shareStateError(e);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
+        }
+    }
+
+    @GetMapping("/shares/{shareNo}")
+    public ResponseEntity<Map<String, Object>> viewSharedDoc(@PathVariable String shareNo) {
+        UserEntity currentUser = userService.getCurrentUserEntity();
+        if (currentUser == null) {
+            return unauthorized();
+        }
+        try {
+            return ResponseEntity.ok(success("查询分享文档成功", cloudDocService.getSharedDoc(currentUser, shareNo)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
+        } catch (IllegalStateException e) {
+            return shareStateError(e);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
+        }
+    }
+
+    @DeleteMapping("/shares/{shareNo}")
+    public ResponseEntity<Map<String, Object>> revokeShare(@PathVariable String shareNo) {
+        UserEntity currentUser = userService.getCurrentUserEntity();
+        if (currentUser == null) {
+            return unauthorized();
+        }
+        try {
+            return ResponseEntity.ok(success("撤销分享成功", cloudDocService.revokeShare(currentUser, shareNo)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
+        } catch (IllegalStateException e) {
+            return shareStateError(e);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务异常", "INTERNAL_ERROR"));
+        }
+    }
+
+    @GetMapping("/shares/received")
+    public ResponseEntity<Map<String, Object>> listReceivedShares(@RequestParam(required = false) Integer page,
+                                                                  @RequestParam(required = false) Integer size,
+                                                                  @RequestParam(required = false) String status) {
+        UserEntity currentUser = userService.getCurrentUserEntity();
+        if (currentUser == null) {
+            return unauthorized();
+        }
+        try {
+            return ResponseEntity.ok(success("查询我收到的分享成功", cloudDocService.listReceivedShares(currentUser, page, size, status)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(400, e.getMessage(), "CLOUD_DOC_INVALID_PARAM"));
         } catch (Exception e) {
@@ -166,5 +242,19 @@ public class CloudDocController {
                 .withZoneSameInstant(ZoneOffset.UTC)
                 .toInstant()
                 .toString();
+    }
+
+    private ResponseEntity<Map<String, Object>> shareStateError(IllegalStateException e) {
+        String message = e.getMessage() == null ? "操作失败" : e.getMessage();
+        if (message.contains("不存在")) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(404, message, "CLOUD_DOC_NOT_FOUND"));
+        }
+        if (message.contains("无权限")
+                || message.contains("仅支持分享给好友")
+                || message.contains("已失效")
+                || message.contains("已过期")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(403, message, "CLOUD_DOC_FORBIDDEN"));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error(409, message, "CLOUD_DOC_VERSION_CONFLICT"));
     }
 }
