@@ -866,8 +866,8 @@ public class UserServiceImpl implements UserService {
     private VipOrderItemVO toVipOrderItemVO(UserVipOrderEntity order) {
         VipOrderItemVO vo = new VipOrderItemVO();
         vo.setPurchaseNo(order.getPurchaseNo());
-        vo.setPaymentOrderNo(order.getPaymentOrderNo());
-        vo.setPaymentMethod(order.getPaymentMethod());
+        vo.setPaymentOrderNo(order.getPaymentOrderNo() == null || order.getPaymentOrderNo().isBlank() ? order.getPurchaseNo() : order.getPaymentOrderNo());
+        vo.setPaymentMethod(order.getPaymentMethod() == null || order.getPaymentMethod().isBlank() ? VipPaymentMethodType.WALLET.getCode() : order.getPaymentMethod());
         vo.setPlanCode(order.getPlanCode());
         vo.setPlanName(order.getPlanName());
         vo.setAmount(order.getAmount());

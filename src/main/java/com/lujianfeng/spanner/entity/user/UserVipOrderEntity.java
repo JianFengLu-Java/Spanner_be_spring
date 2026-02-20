@@ -27,10 +27,10 @@ public class UserVipOrderEntity {
     @Column(name = "purchase_no", nullable = false, length = 64)
     private String purchaseNo;
 
-    @Column(name = "payment_order_no", nullable = false, length = 64)
+    @Column(name = "payment_order_no", length = 64)
     private String paymentOrderNo;
 
-    @Column(name = "payment_method", nullable = false, length = 32)
+    @Column(name = "payment_method", length = 32)
     private String paymentMethod;
 
     @Column(name = "plan_code", nullable = false, length = 16)
@@ -73,6 +73,12 @@ public class UserVipOrderEntity {
         }
         if (status == null || status.isBlank()) {
             status = "SUCCESS";
+        }
+        if (paymentMethod == null || paymentMethod.isBlank()) {
+            paymentMethod = "WALLET";
+        }
+        if (paymentOrderNo == null || paymentOrderNo.isBlank()) {
+            paymentOrderNo = purchaseNo;
         }
     }
 

@@ -22,6 +22,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -93,13 +94,13 @@ public class FileController {
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) {
         try {
-            String validateError = validateImage(file);
-            if (validateError != null) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "code", 400,
+            ValidationResult validationResult = validateImage(file);
+            if (validationResult != null) {
+                return ResponseEntity.status(validationResult.status).body(Map.of(
+                        "code", validationResult.code,
                         "status", "error",
-                        "message", validateError,
-                        "errorCode", "MOMENT_INVALID_PARAM"
+                        "message", validationResult.message,
+                        "errorCode", validationResult.errorCode
                 ));
             }
 
@@ -170,17 +171,39 @@ public class FileController {
         }
     }
 
-    private String validateImage(MultipartFile file) {
+    private ValidationResult validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            return "file 不能为空";
+            return new ValidationResult(400, "file 不能为空", "CLOUD_DOC_INVALID_PARAM", org.springframework.http.HttpStatus.BAD_REQUEST);
         }
         if (file.getSize() > MAX_IMAGE_SIZE) {
-            return "单张图片大小不能超过 10MB";
+            return new ValidationResult(413, "单张图片大小不能超过 10MB", "FILE_TOO_LARGE", org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE);
         }
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
-            return "仅支持图片文件上传";
+        String normalizedType = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT);
+        if (!normalizedType.startsWith("image/")) {
+            return new ValidationResult(415, "仅支持图片文件上传", "FILE_TYPE_NOT_ALLOWED", org.springframework.http.HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        }
+        if (!"image/jpeg".equals(normalizedType)
+                && !"image/jpg".equals(normalizedType)
+                && !"image/png".equals(normalizedType)
+                && !"image/webp".equals(normalizedType)
+                && !"image/gif".equals(normalizedType)) {
+            return new ValidationResult(415, "仅支持 jpg/png/webp/gif", "FILE_TYPE_NOT_ALLOWED", org.springframework.http.HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         }
         return null;
+    }
+
+    private static class ValidationResult {
+        private final int code;
+        private final String message;
+        private final String errorCode;
+        private final org.springframework.http.HttpStatus status;
+
+        private ValidationResult(int code, String message, String errorCode, org.springframework.http.HttpStatus status) {
+            this.code = code;
+            this.message = message;
+            this.errorCode = errorCode;
+            this.status = status;
+        }
     }
 }
