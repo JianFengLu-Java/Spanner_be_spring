@@ -52,15 +52,18 @@ public class CloudDocService {
     private final CloudDocShareRepository cloudDocShareRepository;
     private final UserRepository userRepository;
     private final UserRelationRepository userRelationRepository;
+    private final CloudDocCollabWsService cloudDocCollabWsService;
 
     public CloudDocService(CloudDocRepository cloudDocRepository,
                            CloudDocShareRepository cloudDocShareRepository,
                            UserRepository userRepository,
-                           UserRelationRepository userRelationRepository) {
+                           UserRelationRepository userRelationRepository,
+                           CloudDocCollabWsService cloudDocCollabWsService) {
         this.cloudDocRepository = cloudDocRepository;
         this.cloudDocShareRepository = cloudDocShareRepository;
         this.userRepository = userRepository;
         this.userRelationRepository = userRelationRepository;
+        this.cloudDocCollabWsService = cloudDocCollabWsService;
     }
 
     public PageResultVO<CloudDocSummaryVO> listMyDocs(UserEntity currentUser,
@@ -143,8 +146,10 @@ public class CloudDocService {
             throw new IllegalStateException("无权限编辑该文档");
         }
 
-        if (!Objects.equals(requestDTO.getBaseVersion(), doc.getVersion())) {
-            throw new CloudDocVersionConflictException(doc.getVersion(), doc.getUpdatedAt());
+        long dbVersion = doc.getVersion();
+        long baseVersion = requestDTO.getBaseVersion();
+        if (baseVersion < dbVersion) {
+            throw new CloudDocVersionConflictException(dbVersion, doc.getUpdatedAt());
         }
 
         String nextTitle = normalizeTitle(requestDTO.getTitle());
@@ -156,11 +161,16 @@ public class CloudDocService {
         doc.setContentHtml(contentHtml);
         doc.setContentJson(contentJson);
         doc.setSnippet(toSnippet(contentHtml));
+        // 允许 baseVersion 前移到 DB 当前版本之上，减少协同内存线与 DB 暂时不一致导致的误冲突
+        if (doc.getVersion() < baseVersion) {
+            doc.setVersion(baseVersion);
+        }
         doc.setVersion(doc.getVersion() + 1);
         doc.setUpdatedAt(now);
         doc.setLastSavedAt(now);
 
         CloudDocEntity saved = cloudDocRepository.save(doc);
+        cloudDocCollabWsService.onPersisted(docId, saved.getVersion());
 
         return CloudDocSaveResponseVO.builder()
                 .id(saved.getDocId())

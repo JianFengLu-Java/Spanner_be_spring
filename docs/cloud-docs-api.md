@@ -106,6 +106,9 @@
 - 方法：`PUT /cloud-docs/{docId}`
 - 请求体：`CloudDocSaveRequest`
 - 成功响应（200）：`data` 为 `CloudDocSaveResponse`
+- 版本规则（当前实现）：
+- 当 `baseVersion < 服务端DB当前version` 时返回 `409`。
+- 当 `baseVersion >= 服务端DB当前version` 时允许保存（用于降低协同线短暂漂移导致的误冲突）。
 - 冲突响应（409）：
 ```json
 {
@@ -298,6 +301,7 @@
 - `GET /cloud-docs/{docId}/presence`：在线成员与游标
 - `WS /ws` + STOMP：协作事件推送（内容变更/游标/在线状态，已实现）
 - 详细协议见：`/Users/luzhouyue/Documents/GitHub/Spanner_be_spring/docs/websocket-cloud-docs-api.md`
+- 前端接入建议见：`/Users/luzhouyue/Documents/GitHub/Spanner_be_spring/docs/cloud-docs-collab-frontend-guide.md`
 
 ## 6. 错误码
 - `400 + CLOUD_DOC_INVALID_PARAM`：参数非法

@@ -81,4 +81,39 @@ public interface MomentCommentRepository extends JpaRepository<MomentCommentEnti
                                           Pageable pageable);
 
     long countByMomentAndParentCommentId(MomentEntity moment, String parentCommentId);
+
+    @Query("""
+            select c from MomentCommentEntity c
+            where c.author.id <> :currentUserId
+              and (
+                (c.parentCommentId is null and c.moment.author.id = :currentUserId)
+                or (c.parentCommentId in (
+                    select parent.id from MomentCommentEntity parent
+                    where parent.author.id = :currentUserId
+                ))
+              )
+            order by c.createdAt desc, c.id desc
+            """)
+    List<MomentCommentEntity> findAboutMeFirstPage(@Param("currentUserId") Long currentUserId, Pageable pageable);
+
+    @Query("""
+            select c from MomentCommentEntity c
+            where c.author.id <> :currentUserId
+              and (
+                (c.parentCommentId is null and c.moment.author.id = :currentUserId)
+                or (c.parentCommentId in (
+                    select parent.id from MomentCommentEntity parent
+                    where parent.author.id = :currentUserId
+                ))
+              )
+              and (
+                c.createdAt < :cursorTime
+                or (c.createdAt = :cursorTime and c.id < :cursorId)
+              )
+            order by c.createdAt desc, c.id desc
+            """)
+    List<MomentCommentEntity> findAboutMePage(@Param("currentUserId") Long currentUserId,
+                                              @Param("cursorTime") Instant cursorTime,
+                                              @Param("cursorId") String cursorId,
+                                              Pageable pageable);
 }

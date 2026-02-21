@@ -23,7 +23,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class CloudDocCollabWsService {
@@ -35,6 +37,9 @@ public class CloudDocCollabWsService {
 
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, SessionState>> roomSessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Set<String>> sessionDocs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicLong> docVersions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Object> docLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<String>> docAppliedOpIds = new ConcurrentHashMap<>();
 
     public CloudDocCollabWsService(SimpMessagingTemplate messagingTemplate,
                                    CloudDocRepository cloudDocRepository,
@@ -48,13 +53,14 @@ public class CloudDocCollabWsService {
         String docId = normalizeDocId(docIdRaw);
         ensureAccess(account, docId);
 
+        long currentVersion = getCurrentVersion(docId);
         ConcurrentHashMap<String, SessionState> docRoom = roomSessions.computeIfAbsent(docId, k -> new ConcurrentHashMap<>());
         docRoom.put(sessionId, new SessionState(account));
         sessionDocs.computeIfAbsent(sessionId, k -> ConcurrentHashMap.newKeySet()).add(docId);
 
         broadcastPresenceSnapshot(docId);
         broadcastEvent(docId, account, "presence.join", Map.of("account", account));
-        return ack("join", docId);
+        return ack("join", docId, null, currentVersion, currentVersion, "SENT", null);
     }
 
     public CloudDocWsAckVO leave(String account, String sessionId, String docIdRaw) {
@@ -62,7 +68,8 @@ public class CloudDocCollabWsService {
         removeSessionFromDoc(sessionId, docId);
         broadcastPresenceSnapshot(docId);
         broadcastEvent(docId, account, "presence.leave", Map.of("account", account));
-        return ack("leave", docId);
+        long currentVersion = getCurrentVersion(docId);
+        return ack("leave", docId, null, currentVersion, currentVersion, "SENT", null);
     }
 
     public CloudDocWsAckVO cursor(String account, String sessionId, CloudDocWsCursorDTO payload) {
@@ -83,7 +90,8 @@ public class CloudDocCollabWsService {
                 .head(sessionState.cursorHead)
                 .build();
         broadcastEvent(docId, account, "cursor.update", cursor);
-        return ack("cursor", docId);
+        long currentVersion = getCurrentVersion(docId);
+        return ack("cursor", docId, null, currentVersion, currentVersion, "SENT", null);
     }
 
     public CloudDocWsAckVO patch(String account, String sessionId, CloudDocWsPatchDTO payload) {
@@ -97,14 +105,38 @@ public class CloudDocCollabWsService {
                 .computeIfAbsent(sessionId, k -> new SessionState(account));
         sessionDocs.computeIfAbsent(sessionId, k -> ConcurrentHashMap.newKeySet()).add(docId);
 
+        String opId = normalizeOpId(payload.getOpId());
+        Long baseVersion = payload.getBaseVersion();
+        if (baseVersion == null || baseVersion < 1) {
+            long currentVersion = getCurrentVersion(docId);
+            return ack("patch", docId, opId, baseVersion, currentVersion, "REJECTED", "INVALID_BASE_VERSION");
+        }
+
+        long serverVersion;
+        synchronized (lockForDoc(docId)) {
+            AtomicLong versionSeq = versionSeqForDoc(docId);
+            long current = versionSeq.get();
+            if (baseVersion != current) {
+                return ack("patch", docId, opId, baseVersion, current, "CONFLICT", "VERSION_MISMATCH");
+            }
+            Set<String> applied = appliedOpsForDoc(docId);
+            if (applied.contains(opId)) {
+                return ack("patch", docId, opId, baseVersion, current, "DUPLICATE", null);
+            }
+            serverVersion = versionSeq.incrementAndGet();
+            applied.add(opId);
+        }
+
         CloudDocWsPatchDataVO patchData = CloudDocWsPatchDataVO.builder()
-                .baseVersion(payload.getBaseVersion())
-                .opId(trim(payload.getOpId()))
+                .baseVersion(baseVersion)
+                .serverVersion(serverVersion)
+                .opId(opId)
                 .opType(trim(payload.getOpType()))
                 .payload(trim(payload.getPayload()))
                 .build();
         broadcastEvent(docId, account, "content.patch", patchData);
-        return ack("patch", docId);
+        broadcastPresenceSnapshot(docId);
+        return ack("patch", docId, opId, baseVersion, serverVersion, "APPLIED", null);
     }
 
     public void handleDisconnect(String sessionId) {
@@ -121,12 +153,31 @@ public class CloudDocCollabWsService {
         }
     }
 
+    public long getCurrentVersion(String docIdRaw) {
+        String docId = normalizeDocId(docIdRaw);
+        return versionSeqForDoc(docId).get();
+    }
+
+    public void onPersisted(String docIdRaw, long persistedVersion) {
+        if (persistedVersion < 1) {
+            return;
+        }
+        String docId = normalizeDocId(docIdRaw);
+        synchronized (lockForDoc(docId)) {
+            AtomicLong seq = versionSeqForDoc(docId);
+            if (persistedVersion > seq.get()) {
+                seq.set(persistedVersion);
+            }
+        }
+    }
+
     private void broadcastPresenceSnapshot(String docId) {
         ConcurrentHashMap<String, SessionState> docRoom = roomSessions.get(docId);
         List<CloudDocWsMemberVO> members = buildMembers(docRoom);
         Map<String, Object> data = new HashMap<>();
         data.put("members", members);
         data.put("onlineCount", members.size());
+        data.put("serverVersion", getCurrentVersion(docId));
         sendEventToDocMembers(docId, CloudDocWsEventVO.builder()
                 .eventType("presence.snapshot")
                 .docId(docId)
@@ -212,6 +263,23 @@ public class CloudDocCollabWsService {
         }
     }
 
+    private AtomicLong versionSeqForDoc(String docId) {
+        return docVersions.computeIfAbsent(docId, key -> {
+            long dbVersion = cloudDocRepository.findByDocIdAndDeletedFalse(docId)
+                    .map(CloudDocEntity::getVersion)
+                    .orElse(1L);
+            return new AtomicLong(Math.max(1L, dbVersion));
+        });
+    }
+
+    private Set<String> appliedOpsForDoc(String docId) {
+        return docAppliedOpIds.computeIfAbsent(docId, key -> ConcurrentHashMap.newKeySet());
+    }
+
+    private Object lockForDoc(String docId) {
+        return docLocks.computeIfAbsent(docId, key -> new Object());
+    }
+
     private String normalizeDocId(String docIdRaw) {
         String docId = trim(docIdRaw);
         if (docId == null) {
@@ -227,11 +295,29 @@ public class CloudDocCollabWsService {
         return value;
     }
 
-    private CloudDocWsAckVO ack(String action, String docId) {
+    private String normalizeOpId(String opIdRaw) {
+        String opId = trim(opIdRaw);
+        if (opId != null) {
+            return opId;
+        }
+        return "op_" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private CloudDocWsAckVO ack(String action,
+                                String docId,
+                                String opId,
+                                Long baseVersion,
+                                Long serverVersion,
+                                String status,
+                                String reason) {
         return CloudDocWsAckVO.builder()
                 .action(action)
                 .docId(docId)
-                .status("SENT")
+                .opId(opId)
+                .baseVersion(baseVersion)
+                .serverVersion(serverVersion)
+                .status(status)
+                .reason(reason)
                 .at(formatUtc(LocalDateTime.now()))
                 .build();
     }

@@ -3,6 +3,7 @@ package com.lujianfeng.spanner.service.service;
 import com.lujianfeng.spanner.dto.moment.MomentCommentCreateRequestDTO;
 import com.lujianfeng.spanner.dto.moment.MomentCreateRequestDTO;
 import com.lujianfeng.spanner.vo.moment.CursorPageVO;
+import com.lujianfeng.spanner.vo.moment.MomentAboutMeItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentCommentItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentLikeUserVO;
@@ -29,4 +30,6 @@ public interface MomentService {
     MomentCommentItemVO createComment(String momentId, MomentCommentCreateRequestDTO request);
 
     CursorPageVO<MomentLikeUserVO> listLikes(String momentId, String cursor, Integer size);
+
+    CursorPageVO<MomentAboutMeItemVO> listAboutMe(String cursor, Integer size);
 }

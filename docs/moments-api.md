@@ -89,6 +89,27 @@
 }
 ```
 
+### MomentAboutMeItem
+```json
+{
+  "id": "mc_1739359000000_ef56gh78",
+  "type": "COMMENT_ON_MY_MOMENT",
+  "momentId": "m_1739358000000_ab12cd34",
+  "momentTitle": "今日份打卡",
+  "sourceCommentId": "mc_1739359000000_ef56gh78",
+  "parentCommentId": null,
+  "fromUser": {
+    "account": "10002",
+    "name": "李四",
+    "avatar": "https://cdn.example.com/avatar-10002.png"
+  },
+  "content": "评论内容",
+  "targetContent": "我的动态正文摘要",
+  "timestamp": "2026-02-12T09:00:00Z",
+  "createdAt": "2026-02-12T09:00:00Z"
+}
+```
+
 ## 接口列表
 
 ## 1. 获取动态流
@@ -105,6 +126,17 @@
 ## 2. 获取动态详情
 - 方法: `GET /moments/{momentId}`
 - 成功响应: `data` 为 `MomentItem`
+
+## 2.1 获取关于我的动态
+- 方法: `GET /moments/about-me`
+- Query 参数:
+- `cursor`: 可选，游标
+- `size`: 可选，默认 `20`，范围 `1-50`
+
+- 成功响应: `data` 为 `CursorPage<MomentAboutMeItem>`
+- `type` 枚举:
+- `COMMENT_ON_MY_MOMENT`: 别人评论了我的动态（一级评论）
+- `REPLY_TO_ME`: 别人回复了我的评论（二级回复）
 
 ## 3. 发布动态
 - 方法: `POST /moments`

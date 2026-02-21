@@ -3,6 +3,8 @@ package com.lujianfeng.spanner.controller;
 import com.lujianfeng.spanner.dto.moment.MomentCommentCreateRequestDTO;
 import com.lujianfeng.spanner.dto.moment.MomentCreateRequestDTO;
 import com.lujianfeng.spanner.service.service.MomentService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,6 +25,7 @@ import java.util.Map;
 @RequestMapping("/moments")
 public class MomentController {
 
+    private static final Logger log = LoggerFactory.getLogger(MomentController.class);
     private final MomentService momentService;
 
     public MomentController(MomentService momentService) {
@@ -45,6 +48,24 @@ public class MomentController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(401, e.getMessage(), "UNAUTHORIZED"));
         } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务器内部错误", "INTERNAL_ERROR"));
+        }
+    }
+
+    @GetMapping("/about-me")
+    public ResponseEntity<Map<String, Object>> listAboutMe(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false, defaultValue = "20") Integer size
+    ) {
+        log.info("进入关于我的动态接口, cursor={}, size={}", cursor, size);
+        try {
+            return ResponseEntity.ok(success("查询关于我的动态成功", momentService.listAboutMe(cursor, size)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(400, e.getMessage(), "MOMENT_INVALID_PARAM"));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(401, e.getMessage(), "UNAUTHORIZED"));
+        } catch (Exception e) {
+            log.error("查询关于我的动态失败, cursor={}, size={}", cursor, size, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(500, "服务器内部错误", "INTERNAL_ERROR"));
         }
     }

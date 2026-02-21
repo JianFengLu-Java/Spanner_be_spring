@@ -70,6 +70,7 @@
   "at": "2026-02-20T12:00:00Z",
   "data": {
     "baseVersion": 8,
+    "serverVersion": 9,
     "opId": "op_17370100001",
     "opType": "replace",
     "payload": "{\"path\":\"/content/0\",\"value\":\"hello\"}"
@@ -96,7 +97,8 @@
       }
     }
   ],
-  "onlineCount": 1
+  "onlineCount": 1,
+  "serverVersion": 9
 }
 ```
 
@@ -105,10 +107,20 @@
 {
   "action": "patch",
   "docId": "doc_20260220_000001",
-  "status": "SENT",
+  "opId": "op_17370100001",
+  "baseVersion": 8,
+  "serverVersion": 9,
+  "status": "APPLIED",
+  "reason": null,
   "at": "2026-02-20T12:00:00Z"
 }
 ```
+
+`status` 枚举：
+- `APPLIED`：服务端已接收并分配 `serverVersion`，可从待发队列移除。
+- `CONFLICT`：`baseVersion` 与服务端版本不一致，需要重拉并重放本地未确认操作。
+- `DUPLICATE`：同 `opId` 重复提交，可直接忽略。
+- `REJECTED`：请求参数非法（如 `baseVersion` 缺失）。
 
 ### 6.3 业务错误 `/user/queue/errors`
 ```json
@@ -127,8 +139,11 @@
 - 其他用户会收到错误消息。
 
 ## 8. 说明
-- `patch` 仅做实时广播，不直接落库。
-- 持久化仍建议走 REST：`PUT /cloud-docs/{docId}`。
+- `patch` 走“服务端顺序版本线”：
+- 仅当 `baseVersion == 当前 serverVersion` 才会 `APPLIED`。
+- `APPLIED` 后返回新的 `serverVersion`，并广播 `content.patch`。
+- 持久化仍走 REST：`PUT /cloud-docs/{docId}`，其 `baseVersion` 需使用最新 `serverVersion`。
+- 服务端 `save` 已按“数据库版本 vs 协作版本”取最大值校验，减少多人协同时的误冲突。
 
 ## 9. 前端接入示例
 ```javascript

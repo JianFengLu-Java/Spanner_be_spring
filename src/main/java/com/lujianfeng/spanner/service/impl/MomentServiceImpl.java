@@ -18,6 +18,7 @@ import com.lujianfeng.spanner.service.task.TaskRewardService;
 import com.lujianfeng.spanner.service.service.MomentService;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.moment.CursorPageVO;
+import com.lujianfeng.spanner.vo.moment.MomentAboutMeItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentCommentItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentItemVO;
 import com.lujianfeng.spanner.vo.moment.MomentLikeUserVO;
@@ -42,6 +43,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class MomentServiceImpl implements MomentService {
@@ -398,6 +400,49 @@ public class MomentServiceImpl implements MomentService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageVO<MomentAboutMeItemVO> listAboutMe(String cursor, Integer size) {
+        UserEntity currentUser = requireCurrentUser();
+        int pageSize = normalizePageSize(size);
+        CursorToken cursorToken = parseCursorToken(cursor, false);
+        boolean hasCursor = cursorToken.time() != null && cursorToken.id() != null;
+
+        Pageable pageable = PageRequest.of(0, pageSize + 1);
+        List<MomentCommentEntity> entities;
+        if (hasCursor) {
+            entities = momentCommentRepository.findAboutMePage(currentUser.getId(), cursorToken.time(), cursorToken.id(), pageable);
+        } else {
+            entities = momentCommentRepository.findAboutMeFirstPage(currentUser.getId(), pageable);
+        }
+
+        boolean hasMore = entities.size() > pageSize;
+        if (hasMore) {
+            entities = entities.subList(0, pageSize);
+        }
+
+        Map<String, MomentCommentEntity> parentMap = loadParentCommentMap(entities);
+        List<MomentAboutMeItemVO> records = entities.stream()
+                .map(entity -> {
+                    String parentId = entity.getParentCommentId();
+                    MomentCommentEntity parent = parentId == null ? null : parentMap.get(parentId);
+                    return toAboutMeItem(entity, parent);
+                })
+                .toList();
+
+        String nextCursor = null;
+        if (hasMore && !entities.isEmpty()) {
+            MomentCommentEntity tail = entities.get(entities.size() - 1);
+            nextCursor = buildCursor(tail.getCreatedAt(), tail.getId());
+        }
+
+        return CursorPageVO.<MomentAboutMeItemVO>builder()
+                .records(records)
+                .nextCursor(nextCursor)
+                .hasMore(hasMore)
+                .build();
+    }
+
     private Specification<MomentEntity> buildMomentListSpec(UserEntity currentUser, String tab, String keyword, CursorToken cursorToken) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -516,6 +561,53 @@ public class MomentServiceImpl implements MomentService {
                 .avatar(user.getAvatarUrl())
                 .likedAt(likeEntity.getLikedAt())
                 .build();
+    }
+
+    private MomentAboutMeItemVO toAboutMeItem(MomentCommentEntity entity, MomentCommentEntity parentComment) {
+        boolean isReply = entity.getParentCommentId() != null;
+        String momentTitle = safeTrim(entity.getMoment().getTitle());
+        if (momentTitle == null) {
+            momentTitle = "";
+        }
+        return MomentAboutMeItemVO.builder()
+                .id(entity.getId())
+                .type(isReply ? "REPLY_TO_ME" : "COMMENT_ON_MY_MOMENT")
+                .momentId(entity.getMoment().getId())
+                .momentTitle(trimForDisplay(momentTitle, 80))
+                .sourceCommentId(entity.getId())
+                .parentCommentId(entity.getParentCommentId())
+                .fromUser(toUserVO(entity.getAuthor()))
+                .content(trimForDisplay(entity.getText(), 200))
+                .targetContent(resolveTargetContent(entity, parentComment))
+                .timestamp(entity.getCreatedAt())
+                .createdAt(entity.getCreatedAt())
+                .build();
+    }
+
+    private String resolveTargetContent(MomentCommentEntity entity, MomentCommentEntity parentComment) {
+        if (entity.getParentCommentId() == null) {
+            String momentText = safeTrim(entity.getMoment().getContentText());
+            if (momentText == null) {
+                momentText = safeTrim(entity.getMoment().getTitle());
+            }
+            return trimForDisplay(momentText, 200);
+        }
+        if (parentComment != null) {
+            return trimForDisplay(parentComment.getText(), 200);
+        }
+        return null;
+    }
+
+    private Map<String, MomentCommentEntity> loadParentCommentMap(List<MomentCommentEntity> entities) {
+        Set<String> parentIds = entities.stream()
+                .map(MomentCommentEntity::getParentCommentId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        if (parentIds.isEmpty()) {
+            return Map.of();
+        }
+        return momentCommentRepository.findAllById(parentIds).stream()
+                .collect(Collectors.toMap(MomentCommentEntity::getId, v -> v));
     }
 
     private MomentUserVO toUserVO(UserEntity user) {
@@ -678,6 +770,17 @@ public class MomentServiceImpl implements MomentService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String trimForDisplay(String value, int maxLen) {
+        String text = safeTrim(value);
+        if (text == null) {
+            return null;
+        }
+        if (text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, maxLen);
     }
 
     private String generateMomentId() {

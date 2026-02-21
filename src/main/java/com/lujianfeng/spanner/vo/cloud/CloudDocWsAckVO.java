@@ -8,6 +8,10 @@ import lombok.Getter;
 public class CloudDocWsAckVO {
     private String action;
     private String docId;
+    private String opId;
+    private Long baseVersion;
+    private Long serverVersion;
     private String status;
+    private String reason;
     private String at;
 }
