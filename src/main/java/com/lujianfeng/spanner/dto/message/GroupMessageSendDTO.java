@@ -7,4 +7,5 @@ public class GroupMessageSendDTO {
     private String groupNo;
     private String content;
     private String clientMessageId;
+    private MessageQuoteDTO quote;
 }

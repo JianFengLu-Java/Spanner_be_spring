@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface GroupMessageRepository extends JpaRepository<GroupMessageEntity, Long> {
     Page<GroupMessageEntity> findByGroupNoOrderBySentAtDesc(String groupNo, Pageable pageable);
 
@@ -23,4 +25,8 @@ public interface GroupMessageRepository extends JpaRepository<GroupMessageEntity
     long countFileMessagesByGroupNo(@Param("groupNo") String groupNo);
 
     void deleteByGroupNo(String groupNo);
+
+    Optional<GroupMessageEntity> findByMessageId(String messageId);
+
+    Optional<GroupMessageEntity> findFirstByClientMessageIdOrderBySentAtDesc(String clientMessageId);
 }

@@ -2,6 +2,7 @@ package com.lujianfeng.spanner.controller;
 
 import com.lujianfeng.spanner.dto.message.MessageDTO;
 import com.lujianfeng.spanner.dto.message.GroupMessageSendDTO;
+import com.lujianfeng.spanner.dto.message.MessageQuoteDTO;
 import com.lujianfeng.spanner.dto.message.PrivateMessageSendDTO;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.entity.user.UserRelationEnum;
@@ -11,6 +12,7 @@ import com.lujianfeng.spanner.service.GroupMessageDispatchService;
 import com.lujianfeng.spanner.service.PrivateMessageDispatchService;
 import com.lujianfeng.spanner.vo.message.GroupMessageAckVO;
 import com.lujianfeng.spanner.vo.message.MessageAckVO;
+import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import com.lujianfeng.spanner.vo.message.WsErrorVO;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -67,6 +69,7 @@ public class ChatController {
         try {
             String groupNo = payload == null ? null : trim(payload.getGroupNo());
             String content = payload == null ? null : trim(payload.getContent());
+            MessageQuoteVO quote = normalizeQuote(payload == null ? null : payload.getQuote());
             if (groupNo == null) {
                 sendErrorToUser(from, "INVALID_GROUP_NO", "groupNo 不能为空", clientMessageId);
                 return;
@@ -77,10 +80,12 @@ public class ChatController {
             }
 
             GroupMessageAckVO ackVO =
-                    groupMessageDispatchService.dispatchGroupMessage(from, groupNo, content, clientMessageId);
+                    groupMessageDispatchService.dispatchGroupMessage(from, groupNo, content, quote, clientMessageId);
             messagingTemplate.convertAndSendToUser(from, "/queue/group.acks", ackVO);
         } catch (IllegalArgumentException e) {
-            sendErrorToUser(from, "INVALID_GROUP", e.getMessage(), clientMessageId);
+            String message = e.getMessage() == null ? "参数非法" : e.getMessage();
+            String code = message.contains("group") ? "INVALID_GROUP" : "INVALID_PARAM";
+            sendErrorToUser(from, code, message, clientMessageId);
         } catch (IllegalStateException e) {
             sendErrorToUser(from, "GROUP_PERMISSION_DENIED", e.getMessage(), clientMessageId);
         } catch (Exception e) {
@@ -121,6 +126,7 @@ public class ChatController {
         try {
             String to = payload == null ? null : trim(payload.getTo());
             String content = payload == null ? null : trim(payload.getContent());
+            MessageQuoteVO quote = normalizeQuote(payload == null ? null : payload.getQuote());
             log.debug("Received private message, from={}, to={}, clientMessageId={}", from, to, clientMessageId);
 
             if (to == null) {
@@ -152,10 +158,13 @@ public class ChatController {
                 return;
             }
 
-            MessageAckVO ackVO = privateMessageDispatchService.dispatchPrivateMessage(from, to, content, clientMessageId, true);
+            MessageAckVO ackVO = privateMessageDispatchService
+                    .dispatchPrivateMessage(from, to, content, quote, clientMessageId, true);
             messagingTemplate.convertAndSendToUser(from, "/queue/acks", ackVO);
             log.debug("Sent private message ack, messageId={}, from={}, to={}, status={}",
                     ackVO.getMessageId(), from, to, ackVO.getStatus());
+        } catch (IllegalArgumentException e) {
+            sendErrorToUser(from, "INVALID_PARAM", e.getMessage(), clientMessageId);
         } catch (Exception e) {
             log.error("Unhandled error while sending private message, from={}, clientMessageId={}",
                     from, clientMessageId, e);
@@ -184,6 +193,26 @@ public class ChatController {
         }
         String result = value.trim();
         return result.isEmpty() ? null : result;
+    }
+
+    private MessageQuoteVO normalizeQuote(MessageQuoteDTO quote) {
+        if (quote == null) {
+            return null;
+        }
+        String messageId = trim(quote.getMessageId());
+        String from = trim(quote.getFrom());
+        String content = trim(quote.getContent());
+        if (messageId == null && from == null && content == null) {
+            return null;
+        }
+        if (messageId == null) {
+            throw new IllegalArgumentException("quote.messageId 不能为空");
+        }
+        return MessageQuoteVO.builder()
+                .messageId(messageId)
+                .from(from)
+                .content(content)
+                .build();
     }
 
 }

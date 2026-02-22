@@ -20,6 +20,7 @@ import com.lujianfeng.spanner.service.ChatGroupService;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.group.GroupInfoVO;
 import com.lujianfeng.spanner.vo.message.GroupMessageVO;
+import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -530,8 +531,20 @@ public class GroupController {
                 .groupNo(entity.getGroupNo())
                 .from(entity.getFromAccount())
                 .content(entity.getContent())
+                .quote(toQuoteVO(entity.getQuotedMessageId(), entity.getQuotedFromAccount(), entity.getQuotedContent()))
                 .clientMessageId(entity.getClientMessageId())
                 .sentAt(entity.getSentAt())
+                .build();
+    }
+
+    private MessageQuoteVO toQuoteVO(String messageId, String from, String content) {
+        if (messageId == null || messageId.isBlank()) {
+            return null;
+        }
+        return MessageQuoteVO.builder()
+                .messageId(messageId)
+                .from(from)
+                .content(content)
                 .build();
     }
 

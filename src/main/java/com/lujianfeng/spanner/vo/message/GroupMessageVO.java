@@ -16,6 +16,7 @@ public class GroupMessageVO {
     private String groupNo;
     private String from;
     private String content;
+    private MessageQuoteVO quote;
     private String clientMessageId;
     private LocalDateTime sentAt;
 }

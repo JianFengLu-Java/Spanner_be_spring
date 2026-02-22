@@ -5,6 +5,11 @@ import lombok.Getter;
 
 import java.time.Instant;
 
+/**
+ *
+ */
+
+
 @Getter
 @Builder
 public class EmojiPackItemVO {

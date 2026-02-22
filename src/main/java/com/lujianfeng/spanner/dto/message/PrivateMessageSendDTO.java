@@ -10,4 +10,5 @@ public class PrivateMessageSendDTO {
     private String to;
     private String content;
     private String clientMessageId;
+    private MessageQuoteDTO quote;
 }

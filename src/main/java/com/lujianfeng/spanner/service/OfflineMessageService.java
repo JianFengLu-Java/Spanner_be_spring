@@ -1,6 +1,7 @@
 package com.lujianfeng.spanner.service;
 
 import com.lujianfeng.spanner.vo.message.PrivateMessageVO;
+import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -109,8 +110,24 @@ public class OfflineMessageService {
                 .from(asString(map.get("from")))
                 .to(asString(map.get("to")))
                 .content(asString(map.get("content")))
+                .quote(asQuote(map.get("quote")))
                 .clientMessageId(asString(map.get("clientMessageId")))
                 .sentAt(asLocalDateTime(map.get("sentAt")))
+                .build();
+    }
+
+    private MessageQuoteVO asQuote(Object value) {
+        if (!(value instanceof Map<?, ?> quoteMap)) {
+            return null;
+        }
+        String messageId = asString(quoteMap.get("messageId"));
+        if (messageId == null || messageId.isBlank()) {
+            return null;
+        }
+        return MessageQuoteVO.builder()
+                .messageId(messageId)
+                .from(asString(quoteMap.get("from")))
+                .content(asString(quoteMap.get("content")))
                 .build();
     }
 

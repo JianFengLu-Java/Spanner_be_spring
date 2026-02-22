@@ -5,6 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface PrivateMessageRepository extends JpaRepository<PrivateMessageEntity, Long> {
     Page<PrivateMessageEntity> findByFromAccountAndToAccountOrFromAccountAndToAccountOrderBySentAtDesc(
             String fromA,
@@ -13,4 +15,8 @@ public interface PrivateMessageRepository extends JpaRepository<PrivateMessageEn
             String toB,
             Pageable pageable
     );
+
+    Optional<PrivateMessageEntity> findByMessageId(String messageId);
+
+    Optional<PrivateMessageEntity> findFirstByClientMessageIdOrderBySentAtDesc(String clientMessageId);
 }

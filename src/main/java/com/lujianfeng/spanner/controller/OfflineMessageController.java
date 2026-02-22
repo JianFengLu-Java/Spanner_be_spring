@@ -8,6 +8,7 @@ import com.lujianfeng.spanner.repository.UserRelationRepository;
 import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.service.OfflineMessageService;
 import com.lujianfeng.spanner.service.service.UserService;
+import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import com.lujianfeng.spanner.vo.message.PrivateMessageVO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -147,8 +148,20 @@ public class OfflineMessageController {
                 .from(entity.getFromAccount())
                 .to(entity.getToAccount())
                 .content(entity.getContent())
+                .quote(toQuoteVO(entity.getQuotedMessageId(), entity.getQuotedFromAccount(), entity.getQuotedContent()))
                 .clientMessageId(entity.getClientMessageId())
                 .sentAt(entity.getSentAt())
+                .build();
+    }
+
+    private MessageQuoteVO toQuoteVO(String messageId, String from, String content) {
+        if (messageId == null || messageId.isBlank()) {
+            return null;
+        }
+        return MessageQuoteVO.builder()
+                .messageId(messageId)
+                .from(from)
+                .content(content)
                 .build();
     }
 }

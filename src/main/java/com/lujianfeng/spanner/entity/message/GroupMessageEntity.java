@@ -39,6 +39,15 @@ public class GroupMessageEntity {
     @Column(nullable = false, length = 2000)
     private String content;
 
+    @Column(name = "quoted_message_id", length = 64)
+    private String quotedMessageId;
+
+    @Column(name = "quoted_from_account", length = 32)
+    private String quotedFromAccount;
+
+    @Column(name = "quoted_content", length = 2000)
+    private String quotedContent;
+
     @Column(name = "client_message_id", length = 128)
     private String clientMessageId;
 

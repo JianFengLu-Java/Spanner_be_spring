@@ -3,6 +3,7 @@ package com.lujianfeng.spanner.service;
 import com.lujianfeng.spanner.entity.message.PrivateMessageEntity;
 import com.lujianfeng.spanner.repository.PrivateMessageRepository;
 import com.lujianfeng.spanner.vo.message.MessageAckVO;
+import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import com.lujianfeng.spanner.vo.message.PrivateMessageVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,15 @@ public class PrivateMessageDispatchService {
                                                String content,
                                                String clientMessageId,
                                                boolean echoToSender) {
+        return dispatchPrivateMessage(from, to, content, null, clientMessageId, echoToSender);
+    }
+
+    public MessageAckVO dispatchPrivateMessage(String from,
+                                               String to,
+                                               String content,
+                                               MessageQuoteVO quote,
+                                               String clientMessageId,
+                                               boolean echoToSender) {
         String messageId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
         PrivateMessageVO messageVO = PrivateMessageVO.builder()
@@ -48,6 +58,7 @@ public class PrivateMessageDispatchService {
                 .from(from)
                 .to(to)
                 .content(content)
+                .quote(quote)
                 .clientMessageId(clientMessageId)
                 .sentAt(now)
                 .build();
@@ -92,6 +103,9 @@ public class PrivateMessageDispatchService {
             entity.setFromAccount(messageVO.getFrom());
             entity.setToAccount(messageVO.getTo());
             entity.setContent(messageVO.getContent());
+            entity.setQuotedMessageId(messageVO.getQuote() == null ? null : messageVO.getQuote().getMessageId());
+            entity.setQuotedFromAccount(messageVO.getQuote() == null ? null : messageVO.getQuote().getFrom());
+            entity.setQuotedContent(messageVO.getQuote() == null ? null : messageVO.getQuote().getContent());
             entity.setClientMessageId(messageVO.getClientMessageId());
             entity.setSentAt(messageVO.getSentAt() == null ? LocalDateTime.now() : messageVO.getSentAt());
             entity.setDeliveryStatus(deliveryStatus == null ? "UNKNOWN" : deliveryStatus);
