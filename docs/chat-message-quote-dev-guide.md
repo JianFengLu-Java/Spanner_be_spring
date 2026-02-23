@@ -12,7 +12,7 @@
 
 已实现模块：
 1. 输入模型：`PrivateMessageSendDTO`、`GroupMessageSendDTO` 新增 `quote`
-2. 下行模型：`PrivateMessageVO`、`GroupMessageVO` 新增 `quote`
+2. 下行模型：`PrivateMessageVO`、`GroupMessageVO` 新增 `quote` 与 `fromRealName`
 3. 存储模型：`private_message`、`group_message` 新增引用字段
 4. 分发服务：私聊/群聊发送链路支持引用透传与入库
 5. 查询链路：私聊离线、私聊历史、群聊历史返回 `quote`
@@ -55,13 +55,13 @@
 1. `src/main/java/com/lujianfeng/spanner/dto/message/MessageQuoteDTO.java`
    发送请求中的引用结构
 2. `src/main/java/com/lujianfeng/spanner/vo/message/MessageQuoteVO.java`
-   下行与查询统一引用结构
+   下行与查询统一引用结构（含 `fromRealName`）
 3. `src/main/java/com/lujianfeng/spanner/controller/ChatController.java`
    解析/校验 `quote` 并传给分发服务
 4. `src/main/java/com/lujianfeng/spanner/service/PrivateMessageDispatchService.java`
-   私聊实时分发 + 入库引用字段
+   私聊实时分发 + 发信人真实名补全 + 入库引用字段
 5. `src/main/java/com/lujianfeng/spanner/service/GroupMessageDispatchService.java`
-   群聊实时分发 + 入库引用字段
+   群聊实时分发 + 发信人真实名补全 + 入库引用字段
 6. `src/main/java/com/lujianfeng/spanner/controller/OfflineMessageController.java`
    私聊历史返回 `quote`
 7. `src/main/java/com/lujianfeng/spanner/controller/GroupController.java`
@@ -78,7 +78,8 @@
 3. 断线后拉取 `/messages/offline`，`quote` 不丢失
 4. 拉取 `/messages/history/{friendAccount}`，`quote` 与实时消息一致
 5. 拉取 `/groups/{groupNo}/messages/history`，`quote` 与实时消息一致
-6. 不带 `quote` 的老消息流程无回归
+6. 上述链路均返回 `fromRealName`（兼容返回 `fromName`）
+7. 不带 `quote` 的老消息流程无回归
 
 ---
 

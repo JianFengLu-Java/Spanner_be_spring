@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lujianfeng.spanner.dto.moment.MomentCommentCreateRequestDTO;
 import com.lujianfeng.spanner.dto.moment.MomentCreateRequestDTO;
+import com.lujianfeng.spanner.event.message.MomentInteractionNotifyDomainEvent;
 import com.lujianfeng.spanner.entity.moment.MomentCommentEntity;
 import com.lujianfeng.spanner.entity.moment.MomentEntity;
 import com.lujianfeng.spanner.entity.moment.MomentLikeEntity;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +56,7 @@ public class MomentServiceImpl implements MomentService {
     private final UserRelationRepository userRelationRepository;
     private final UserService userService;
     private final TaskRewardService taskRewardService;
+    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public MomentServiceImpl(MomentRepository momentRepository,
@@ -61,13 +64,15 @@ public class MomentServiceImpl implements MomentService {
                              MomentCommentRepository momentCommentRepository,
                              UserRelationRepository userRelationRepository,
                              UserService userService,
-                             TaskRewardService taskRewardService) {
+                             TaskRewardService taskRewardService,
+                             ApplicationEventPublisher eventPublisher) {
         this.momentRepository = momentRepository;
         this.momentLikeRepository = momentLikeRepository;
         this.momentCommentRepository = momentCommentRepository;
         this.userRelationRepository = userRelationRepository;
         this.userService = userService;
         this.taskRewardService = taskRewardService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -220,6 +225,7 @@ public class MomentServiceImpl implements MomentService {
                 momentLikeRepository.save(like);
                 moment.setLikesCount(moment.getLikesCount() + 1);
                 momentRepository.save(moment);
+                publishMomentInteractionNotify(MomentInteractionType.LIKE, currentUser, moment, null, null);
             } catch (Exception ignored) {
                 // 并发下唯一键冲突时按已点赞处理，保持幂等
             }
@@ -324,10 +330,11 @@ public class MomentServiceImpl implements MomentService {
 
         String parentCommentId = safeTrim(request.getParentCommentId());
         String replyToAccount = safeTrim(request.getReplyToAccount());
+        MomentCommentEntity parentComment = null;
         if (parentCommentId != null) {
-            MomentCommentEntity parent = momentCommentRepository.findByIdAndMoment(parentCommentId, moment)
+            parentComment = momentCommentRepository.findByIdAndMoment(parentCommentId, moment)
                     .orElseThrow(() -> new IllegalStateException("评论不存在"));
-            if (parent.getParentCommentId() != null) {
+            if (parentComment.getParentCommentId() != null) {
                 throw new IllegalArgumentException("评论回复深度最多 2 层");
             }
             if (replyToAccount == null || replyToAccount.isEmpty()) {
@@ -354,6 +361,13 @@ public class MomentServiceImpl implements MomentService {
         } catch (Exception ignored) {
             // 奖励失败不阻塞回复主流程
         }
+        publishMomentInteractionNotify(
+                parentComment == null ? MomentInteractionType.COMMENT : MomentInteractionType.REPLY,
+                currentUser,
+                moment,
+                parentComment,
+                text
+        );
 
         return toCommentItem(saved, moment.getId(), 0L);
     }
@@ -789,6 +803,83 @@ public class MomentServiceImpl implements MomentService {
 
     private String generateCommentId() {
         return "mc_" + Instant.now().toEpochMilli() + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    private void publishMomentInteractionNotify(MomentInteractionType type,
+                                                UserEntity actor,
+                                                MomentEntity moment,
+                                                MomentCommentEntity parentComment,
+                                                String commentText) {
+        if (type == null || actor == null || moment == null) {
+            return;
+        }
+        String toAccount = resolveNotifyToAccount(type, moment, parentComment);
+        if (toAccount == null || toAccount.equals(actor.getAccount())) {
+            return;
+        }
+
+        String actorName = displayName(actor);
+        String title = trimForDisplay(moment.getTitle(), 30);
+        String safeTitle = title == null ? "你的动态" : "《" + title + "》";
+        String textPreview = trimForDisplay(commentText, 60);
+        String plainText = switch (type) {
+            case LIKE -> actorName + " 赞了你的动态" + safeTitle;
+            case COMMENT -> actorName + " 评论了你的动态" + safeTitle
+                    + (textPreview == null ? "" : "：" + textPreview);
+            case REPLY -> actorName + " 回复了你的评论" + (textPreview == null ? "" : "：" + textPreview);
+        };
+        String content = buildMomentNotifyContent(type, actor, moment, textPreview, plainText);
+
+        eventPublisher.publishEvent(new MomentInteractionNotifyDomainEvent(toAccount, content));
+    }
+
+    private String resolveNotifyToAccount(MomentInteractionType type, MomentEntity moment, MomentCommentEntity parentComment) {
+        return switch (type) {
+            case LIKE, COMMENT -> moment.getAuthor() == null ? null : safeTrim(moment.getAuthor().getAccount());
+            case REPLY -> parentComment == null || parentComment.getAuthor() == null
+                    ? null
+                    : safeTrim(parentComment.getAuthor().getAccount());
+        };
+    }
+
+    private String displayName(UserEntity user) {
+        if (user == null) {
+            return "有人";
+        }
+        String name = safeTrim(user.getRealName());
+        if (name != null) {
+            return name;
+        }
+        String account = safeTrim(user.getAccount());
+        return account == null ? "有人" : account;
+    }
+
+    private String buildMomentNotifyContent(MomentInteractionType type,
+                                            UserEntity actor,
+                                            MomentEntity moment,
+                                            String commentPreview,
+                                            String plainText) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("notificationType", "MOMENT_INTERACTION");
+        payload.put("interactionType", type.name());
+        payload.put("momentId", moment.getId());
+        payload.put("momentTitle", trimForDisplay(moment.getTitle(), 80));
+        payload.put("operatorAccount", actor == null ? null : safeTrim(actor.getAccount()));
+        payload.put("operatorName", displayName(actor));
+        payload.put("operatorAvatarUrl", actor == null ? null : safeTrim(actor.getAvatarUrl()));
+        payload.put("commentText", commentPreview);
+        payload.put("text", plainText);
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ignored) {
+            return plainText;
+        }
+    }
+
+    private enum MomentInteractionType {
+        LIKE,
+        COMMENT,
+        REPLY
     }
 
     private record CursorToken(Instant time, String id) {

@@ -146,6 +146,8 @@
         "messageId": "8f536ea3-9201-418a-a622-f893d4878481",
         "groupNo": "735662840120",
         "from": "1000001",
+        "fromRealName": "张三",
+        "fromAvatarUrl": "https://cdn.example.com/avatar-1000001.png",
         "content": "大家好",
         "clientMessageId": "g_17370100001",
         "sentAt": "2026-02-17T10:15:30.123"

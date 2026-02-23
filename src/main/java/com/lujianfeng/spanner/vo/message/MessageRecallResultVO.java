@@ -1,31 +1,23 @@
 package com.lujianfeng.spanner.vo.message;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * 私聊消息下行体
- */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PrivateMessageVO {
+public class MessageRecallResultVO {
     private String messageId;
+    private String messageType;
+    private String groupNo;
     private String from;
-    private String formName;
-    private String fromName;
-    private String fromRealName;
-    private String fromAvatarUrl;
     private String to;
-    private String content;
-    private MessageQuoteVO quote;
-    private String clientMessageId;
-    private LocalDateTime sentAt;
     private Boolean recalled;
     private LocalDateTime recalledAt;
+    private LocalDateTime recallDeadlineAt;
 }

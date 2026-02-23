@@ -16,6 +16,7 @@ import com.lujianfeng.spanner.entity.group.ChatGroupEntity;
 import com.lujianfeng.spanner.entity.message.GroupMessageEntity;
 import com.lujianfeng.spanner.entity.user.UserEntity;
 import com.lujianfeng.spanner.repository.GroupMessageRepository;
+import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.service.ChatGroupService;
 import com.lujianfeng.spanner.service.service.UserService;
 import com.lujianfeng.spanner.vo.group.GroupInfoVO;
@@ -37,10 +38,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/groups")
@@ -49,13 +53,16 @@ public class GroupController {
     private final UserService userService;
     private final ChatGroupService chatGroupService;
     private final GroupMessageRepository groupMessageRepository;
+    private final UserRepository userRepository;
 
     public GroupController(UserService userService,
                            ChatGroupService chatGroupService,
-                           GroupMessageRepository groupMessageRepository) {
+                           GroupMessageRepository groupMessageRepository,
+                           UserRepository userRepository) {
         this.userService = userService;
         this.chatGroupService = chatGroupService;
         this.groupMessageRepository = groupMessageRepository;
+        this.userRepository = userRepository;
     }
 
     @PostMapping
@@ -509,7 +516,8 @@ public class GroupController {
             Pageable pageable = PageRequest.of(safePage - 1, safeSize);
 
             Page<GroupMessageEntity> pageResult = groupMessageRepository.findByGroupNoOrderBySentAtDesc(group.getGroupNo(), pageable);
-            List<GroupMessageVO> messages = new ArrayList<>(pageResult.getContent().stream().map(this::toVO).toList());
+            List<GroupMessageVO> messages = new ArrayList<>(pageResult.getContent().stream().map(entity -> toVO(entity, null)).toList());
+            messages = enrichMessageNames(messages);
             Collections.reverse(messages);
 
             Map<String, Object> data = new HashMap<>();
@@ -525,27 +533,125 @@ public class GroupController {
         }
     }
 
-    private GroupMessageVO toVO(GroupMessageEntity entity) {
+    private GroupMessageVO toVO(GroupMessageEntity entity, String fromRealName) {
         return GroupMessageVO.builder()
                 .messageId(entity.getMessageId())
                 .groupNo(entity.getGroupNo())
                 .from(entity.getFromAccount())
+                .formName(fromRealName)
+                .fromName(fromRealName)
+                .fromRealName(fromRealName)
+                .fromAvatarUrl(null)
                 .content(entity.getContent())
-                .quote(toQuoteVO(entity.getQuotedMessageId(), entity.getQuotedFromAccount(), entity.getQuotedContent()))
+                .quote(toQuoteVO(entity.getQuotedMessageId(), entity.getQuotedFromAccount(), entity.getQuotedContent(), null, null))
                 .clientMessageId(entity.getClientMessageId())
                 .sentAt(entity.getSentAt())
+                .recalled(Boolean.TRUE.equals(entity.getRecalled()))
+                .recalledAt(entity.getRecalledAt())
                 .build();
     }
 
-    private MessageQuoteVO toQuoteVO(String messageId, String from, String content) {
+    private MessageQuoteVO toQuoteVO(String messageId, String from, String content, String fromRealName, String fromAvatarUrl) {
         if (messageId == null || messageId.isBlank()) {
             return null;
         }
         return MessageQuoteVO.builder()
                 .messageId(messageId)
                 .from(from)
+                .formName(fromRealName)
+                .fromName(fromRealName)
+                .fromRealName(fromRealName)
+                .fromAvatarUrl(fromAvatarUrl)
                 .content(content)
                 .build();
+    }
+
+    private List<GroupMessageVO> enrichMessageNames(List<GroupMessageVO> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+        Set<String> accounts = new HashSet<>();
+        for (GroupMessageVO message : messages) {
+            if (message.getFrom() != null && !message.getFrom().isBlank()) {
+                accounts.add(message.getFrom());
+            }
+            if (message.getQuote() != null && message.getQuote().getFrom() != null && !message.getQuote().getFrom().isBlank()) {
+                accounts.add(message.getQuote().getFrom());
+            }
+        }
+        Map<String, UserProfile> profileMap = loadUserProfileMap(accounts);
+        List<GroupMessageVO> result = new ArrayList<>(messages.size());
+        for (GroupMessageVO message : messages) {
+            UserProfile fromProfile = resolveProfile(profileMap, message.getFrom());
+            MessageQuoteVO quote = message.getQuote();
+            UserProfile quoteProfile = quote == null ? null : resolveProfile(profileMap, quote.getFrom());
+            MessageQuoteVO quoteWithName = quote == null ? null : MessageQuoteVO.builder()
+                    .messageId(quote.getMessageId())
+                    .from(quote.getFrom())
+                    .formName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromRealName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromAvatarUrl(firstNonBlank(quote.getFromAvatarUrl(), quoteProfile == null ? null : quoteProfile.avatarUrl()))
+                    .content(quote.getContent())
+                    .build();
+            result.add(GroupMessageVO.builder()
+                    .messageId(message.getMessageId())
+                    .groupNo(message.getGroupNo())
+                    .from(message.getFrom())
+                    .formName(fromProfile.realName())
+                    .fromName(fromProfile.realName())
+                    .fromRealName(fromProfile.realName())
+                    .fromAvatarUrl(firstNonBlank(message.getFromAvatarUrl(), fromProfile.avatarUrl()))
+                    .content(message.getContent())
+                    .quote(quoteWithName)
+                    .clientMessageId(message.getClientMessageId())
+                    .sentAt(message.getSentAt())
+                    .recalled(Boolean.TRUE.equals(message.getRecalled()))
+                    .recalledAt(message.getRecalledAt())
+                    .build());
+        }
+        return result;
+    }
+
+    private Map<String, UserProfile> loadUserProfileMap(Collection<String> accounts) {
+        if (accounts == null || accounts.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, UserProfile> map = new HashMap<>();
+        for (UserEntity user : userRepository.findByAccountIn(accounts)) {
+            String realName = user.getRealName();
+            if (realName == null || realName.isBlank()) {
+                realName = user.getAccount();
+            }
+            map.put(user.getAccount(), new UserProfile(realName, user.getAvatarUrl()));
+        }
+        return map;
+    }
+
+    private UserProfile resolveProfile(Map<String, UserProfile> map, String account) {
+        if (account == null || account.isBlank()) {
+            return new UserProfile(null, null);
+        }
+        UserProfile profile = map.get(account);
+        if (profile != null) {
+            return profile;
+        }
+        return new UserProfile(account, null);
+    }
+
+    private record UserProfile(String realName, String avatarUrl) {
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private UserEntity currentUser() {

@@ -108,11 +108,19 @@ public class OfflineMessageService {
         return PrivateMessageVO.builder()
                 .messageId(asString(map.get("messageId")))
                 .from(asString(map.get("from")))
+                .formName(firstNonBlank(asString(map.get("formName")),
+                        asString(map.get("fromName")),
+                        asString(map.get("fromRealName"))))
+                .fromName(asString(map.get("fromName")))
+                .fromRealName(asString(map.get("fromRealName")))
+                .fromAvatarUrl(asString(map.get("fromAvatarUrl")))
                 .to(asString(map.get("to")))
                 .content(asString(map.get("content")))
                 .quote(asQuote(map.get("quote")))
                 .clientMessageId(asString(map.get("clientMessageId")))
                 .sentAt(asLocalDateTime(map.get("sentAt")))
+                .recalled(asBoolean(map.get("recalled")))
+                .recalledAt(asLocalDateTime(map.get("recalledAt")))
                 .build();
     }
 
@@ -127,6 +135,12 @@ public class OfflineMessageService {
         return MessageQuoteVO.builder()
                 .messageId(messageId)
                 .from(asString(quoteMap.get("from")))
+                .formName(firstNonBlank(asString(quoteMap.get("formName")),
+                        asString(quoteMap.get("fromName")),
+                        asString(quoteMap.get("fromRealName"))))
+                .fromName(asString(quoteMap.get("fromName")))
+                .fromRealName(asString(quoteMap.get("fromRealName")))
+                .fromAvatarUrl(asString(quoteMap.get("fromAvatarUrl")))
                 .content(asString(quoteMap.get("content")))
                 .build();
     }
@@ -147,5 +161,27 @@ public class OfflineMessageService {
         } catch (Exception ignore) {
             return null;
         }
+    }
+
+    private Boolean asBoolean(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

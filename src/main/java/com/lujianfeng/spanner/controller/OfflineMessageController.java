@@ -23,10 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 登录后离线消息拉取接口
@@ -64,6 +67,7 @@ public class OfflineMessageController {
         }
 
         List<PrivateMessageVO> messages = offlineMessageService.drainPrivateMessages(currentUser.getAccount());
+        messages = enrichMessageNames(messages);
         Map<String, Object> data = new HashMap<>();
         data.put("messages", messages);
         data.put("count", messages.size());
@@ -106,8 +110,9 @@ public class OfflineMessageController {
                         currentAccount, targetAccount, targetAccount, currentAccount, pageable);
 
         List<PrivateMessageVO> messages = new ArrayList<>(pageResult.getContent().stream()
-                .map(this::toVO)
+                .map(entity -> toVO(entity, null))
                 .toList());
+        messages = enrichMessageNames(messages);
         Collections.reverse(messages);
 
         Map<String, Object> data = new HashMap<>();
@@ -142,26 +147,128 @@ public class OfflineMessageController {
                 || userRelationRepository.existsByUserAndFriendAndRelationType(toUser, fromUser, UserRelationEnum.ACCEPTED);
     }
 
-    private PrivateMessageVO toVO(PrivateMessageEntity entity) {
+    private PrivateMessageVO toVO(PrivateMessageEntity entity, String fromRealName) {
         return PrivateMessageVO.builder()
                 .messageId(entity.getMessageId())
                 .from(entity.getFromAccount())
+                .formName(fromRealName)
+                .fromName(fromRealName)
+                .fromRealName(fromRealName)
+                .fromAvatarUrl(null)
                 .to(entity.getToAccount())
                 .content(entity.getContent())
-                .quote(toQuoteVO(entity.getQuotedMessageId(), entity.getQuotedFromAccount(), entity.getQuotedContent()))
+                .quote(toQuoteVO(entity.getQuotedMessageId(),
+                        entity.getQuotedFromAccount(),
+                        entity.getQuotedContent(),
+                        null,
+                        null))
                 .clientMessageId(entity.getClientMessageId())
                 .sentAt(entity.getSentAt())
+                .recalled(Boolean.TRUE.equals(entity.getRecalled()))
+                .recalledAt(entity.getRecalledAt())
                 .build();
     }
 
-    private MessageQuoteVO toQuoteVO(String messageId, String from, String content) {
+    private MessageQuoteVO toQuoteVO(String messageId, String from, String content, String fromRealName, String fromAvatarUrl) {
         if (messageId == null || messageId.isBlank()) {
             return null;
         }
         return MessageQuoteVO.builder()
                 .messageId(messageId)
                 .from(from)
+                .formName(fromRealName)
+                .fromName(fromRealName)
+                .fromRealName(fromRealName)
+                .fromAvatarUrl(fromAvatarUrl)
                 .content(content)
                 .build();
+    }
+
+    private List<PrivateMessageVO> enrichMessageNames(List<PrivateMessageVO> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+        Set<String> accounts = new HashSet<>();
+        for (PrivateMessageVO message : messages) {
+            if (message.getFrom() != null && !message.getFrom().isBlank()) {
+                accounts.add(message.getFrom());
+            }
+            if (message.getQuote() != null && message.getQuote().getFrom() != null && !message.getQuote().getFrom().isBlank()) {
+                accounts.add(message.getQuote().getFrom());
+            }
+        }
+        Map<String, UserProfile> profileMap = loadUserProfileMap(accounts);
+        List<PrivateMessageVO> result = new ArrayList<>(messages.size());
+        for (PrivateMessageVO message : messages) {
+            UserProfile fromProfile = resolveProfile(profileMap, message.getFrom());
+            MessageQuoteVO quote = message.getQuote();
+            UserProfile quoteProfile = quote == null ? null : resolveProfile(profileMap, quote.getFrom());
+            MessageQuoteVO quoteWithName = quote == null ? null : MessageQuoteVO.builder()
+                    .messageId(quote.getMessageId())
+                    .from(quote.getFrom())
+                    .formName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromRealName(quoteProfile == null ? null : quoteProfile.realName())
+                    .fromAvatarUrl(firstNonBlank(quote.getFromAvatarUrl(), quoteProfile == null ? null : quoteProfile.avatarUrl()))
+                    .content(quote.getContent())
+                    .build();
+            result.add(PrivateMessageVO.builder()
+                    .messageId(message.getMessageId())
+                    .from(message.getFrom())
+                    .formName(fromProfile.realName())
+                    .fromName(fromProfile.realName())
+                    .fromRealName(fromProfile.realName())
+                    .fromAvatarUrl(firstNonBlank(message.getFromAvatarUrl(), fromProfile.avatarUrl()))
+                    .to(message.getTo())
+                    .content(message.getContent())
+                    .quote(quoteWithName)
+                    .clientMessageId(message.getClientMessageId())
+                    .sentAt(message.getSentAt())
+                    .recalled(Boolean.TRUE.equals(message.getRecalled()))
+                    .recalledAt(message.getRecalledAt())
+                    .build());
+        }
+        return result;
+    }
+
+    private Map<String, UserProfile> loadUserProfileMap(Collection<String> accounts) {
+        if (accounts == null || accounts.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, UserProfile> map = new HashMap<>();
+        for (UserEntity user : userRepository.findByAccountIn(accounts)) {
+            String realName = user.getRealName();
+            if (realName == null || realName.isBlank()) {
+                realName = user.getAccount();
+            }
+            map.put(user.getAccount(), new UserProfile(realName, user.getAvatarUrl()));
+        }
+        return map;
+    }
+
+    private UserProfile resolveProfile(Map<String, UserProfile> map, String account) {
+        if (account == null || account.isBlank()) {
+            return new UserProfile(null, null);
+        }
+        UserProfile profile = map.get(account);
+        if (profile != null) {
+            return profile;
+        }
+        return new UserProfile(account, null);
+    }
+
+    private record UserProfile(String realName, String avatarUrl) {
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

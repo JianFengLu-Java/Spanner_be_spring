@@ -201,16 +201,26 @@ public class ChatController {
         }
         String messageId = trim(quote.getMessageId());
         String from = trim(quote.getFrom());
+        String formName = trim(quote.getFormName());
+        String fromName = trim(quote.getFromName());
+        String fromRealName = trim(quote.getFromRealName());
+        String fromAvatarUrl = trim(quote.getFromAvatarUrl());
         String content = trim(quote.getContent());
-        if (messageId == null && from == null && content == null) {
+        if (messageId == null && from == null && formName == null && fromName == null
+                && fromRealName == null && fromAvatarUrl == null && content == null) {
             return null;
         }
         if (messageId == null) {
             throw new IllegalArgumentException("quote.messageId 不能为空");
         }
+        String normalizedRealName = fromRealName == null ? (fromName == null ? formName : fromName) : fromRealName;
         return MessageQuoteVO.builder()
                 .messageId(messageId)
                 .from(from)
+                .formName(normalizedRealName)
+                .fromName(normalizedRealName)
+                .fromRealName(normalizedRealName)
+                .fromAvatarUrl(fromAvatarUrl)
                 .content(content)
                 .build();
     }

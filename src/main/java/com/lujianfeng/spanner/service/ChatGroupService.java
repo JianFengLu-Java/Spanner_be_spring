@@ -164,10 +164,13 @@ public class ChatGroupService {
     public List<GroupMemberVO> listGroupMembers(UserEntity currentUser, String groupNo) {
         ChatGroupEntity group = findGroupByNo(groupNo);
         ensureMember(group.getId(), currentUser == null ? null : currentUser.getAccount());
-        return chatGroupMemberRepository.findByGroupIdOrderByJoinedAtAsc(group.getId()).stream()
+        List<ChatGroupMemberEntity> members = chatGroupMemberRepository.findByGroupIdOrderByJoinedAtAsc(group.getId());
+        Map<String, UserEntity> users = loadUsersAsMap(members.stream().map(ChatGroupMemberEntity::getUserAccount).toList());
+        return members.stream()
                 .map(member -> GroupMemberVO.builder()
                         .account(member.getUserAccount())
                         .role(member.getRole().name())
+                        .isVip(isVip(users.get(member.getUserAccount())))
                         .joinedAt(member.getJoinedAt())
                         .build())
                 .toList();
@@ -272,10 +275,12 @@ public class ChatGroupService {
         int fromIndex = Math.min((safePage - 1) * safeSize, total);
         int toIndex = Math.min(fromIndex + safeSize, total);
         List<GroupMemberItemVO> records = filtered.subList(fromIndex, toIndex);
+        Map<String, Map<String, Object>> groupMemberProfileMap = buildGroupMemberProfileMap(records, users);
 
         Map<String, Object> data = new HashMap<>();
         data.put("records", records);
         data.put("members", records);
+        data.put("groupMemberProfileMap", groupMemberProfileMap);
         data.put("count", total);
         data.put("page", safePage);
         data.put("size", safeSize);
@@ -997,6 +1002,7 @@ public class ChatGroupService {
                 .role(member.getRole().name())
                 .status("OFFLINE")
                 .joinedAt(member.getJoinedAt())
+                .isVip(isVip(user))
                 .muted(false)
                 .blacklisted(false)
                 .build();
@@ -1021,6 +1027,36 @@ public class ChatGroupService {
         }
         userRepository.findByAccountIn(accounts).forEach(user -> map.put(user.getAccount(), user));
         return map;
+    }
+
+    private Map<String, Map<String, Object>> buildGroupMemberProfileMap(List<GroupMemberItemVO> records,
+                                                                         Map<String, UserEntity> users) {
+        Map<String, Map<String, Object>> profileMap = new HashMap<>();
+        if (records == null || records.isEmpty()) {
+            return profileMap;
+        }
+        for (GroupMemberItemVO record : records) {
+            if (record == null || isBlank(record.getAccount())) {
+                continue;
+            }
+            UserEntity user = users == null ? null : users.get(record.getAccount());
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("account", record.getAccount());
+            profile.put("name", record.getName());
+            profile.put("avatarUrl", record.getAvatarUrl());
+            profile.put("role", record.getRole());
+            profile.put("status", record.getStatus());
+            profile.put("joinedAt", record.getJoinedAt());
+            profile.put("isVip", isVip(user));
+            profileMap.put(record.getAccount(), profile);
+        }
+        return profileMap;
+    }
+
+    private boolean isVip(UserEntity user) {
+        return user != null
+                && user.getVipExpireAt() != null
+                && user.getVipExpireAt().isAfter(LocalDateTime.now());
     }
 
     private ChatGroupUserSettingsEntity resolveOrCreateUserSettings(ChatGroupEntity group, String userAccount) {

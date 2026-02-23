@@ -2,6 +2,7 @@ package com.lujianfeng.spanner.service;
 
 import com.lujianfeng.spanner.entity.message.PrivateMessageEntity;
 import com.lujianfeng.spanner.repository.PrivateMessageRepository;
+import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.vo.message.MessageAckVO;
 import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
 import com.lujianfeng.spanner.vo.message.PrivateMessageVO;
@@ -26,15 +27,18 @@ public class PrivateMessageDispatchService {
     private final OfflineMessageService offlineMessageService;
     private final PrivateMessageRepository privateMessageRepository;
     private final SimpUserRegistry simpUserRegistry;
+    private final UserRepository userRepository;
 
     public PrivateMessageDispatchService(SimpMessagingTemplate messagingTemplate,
                                          OfflineMessageService offlineMessageService,
                                          PrivateMessageRepository privateMessageRepository,
-                                         SimpUserRegistry simpUserRegistry) {
+                                         SimpUserRegistry simpUserRegistry,
+                                         UserRepository userRepository) {
         this.messagingTemplate = messagingTemplate;
         this.offlineMessageService = offlineMessageService;
         this.privateMessageRepository = privateMessageRepository;
         this.simpUserRegistry = simpUserRegistry;
+        this.userRepository = userRepository;
     }
 
     public MessageAckVO dispatchPrivateMessage(String from,
@@ -53,14 +57,22 @@ public class PrivateMessageDispatchService {
                                                boolean echoToSender) {
         String messageId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
+        UserProfile fromProfile = resolveUserProfile(from);
+        MessageQuoteVO normalizedQuote = enrichQuote(quote);
         PrivateMessageVO messageVO = PrivateMessageVO.builder()
                 .messageId(messageId)
                 .from(from)
+                .formName(fromProfile.realName())
+                .fromName(fromProfile.realName())
+                .fromRealName(fromProfile.realName())
+                .fromAvatarUrl(fromProfile.avatarUrl())
                 .to(to)
                 .content(content)
-                .quote(quote)
+                .quote(normalizedQuote)
                 .clientMessageId(clientMessageId)
                 .sentAt(now)
+                .recalled(false)
+                .recalledAt(null)
                 .build();
 
         boolean receiverOnline = isUserOnline(to);
@@ -109,6 +121,8 @@ public class PrivateMessageDispatchService {
             entity.setClientMessageId(messageVO.getClientMessageId());
             entity.setSentAt(messageVO.getSentAt() == null ? LocalDateTime.now() : messageVO.getSentAt());
             entity.setDeliveryStatus(deliveryStatus == null ? "UNKNOWN" : deliveryStatus);
+            entity.setRecalled(Boolean.TRUE.equals(messageVO.getRecalled()));
+            entity.setRecalledAt(messageVO.getRecalledAt());
             privateMessageRepository.save(entity);
         } catch (Exception e) {
             log.error("Failed to persist private message, messageId={}, from={}, to={}",
@@ -117,5 +131,51 @@ public class PrivateMessageDispatchService {
                     messageVO == null ? null : messageVO.getTo(),
                     e);
         }
+    }
+
+    private MessageQuoteVO enrichQuote(MessageQuoteVO quote) {
+        if (quote == null) {
+            return null;
+        }
+        String quoteFromRealName = quote.getFromRealName();
+        String quoteFromAvatarUrl = quote.getFromAvatarUrl();
+        if (quote.getFrom() != null && !quote.getFrom().isBlank()
+                && ((quoteFromRealName == null || quoteFromRealName.isBlank())
+                || (quoteFromAvatarUrl == null || quoteFromAvatarUrl.isBlank()))) {
+            UserProfile quoteProfile = resolveUserProfile(quote.getFrom());
+            if (quoteFromRealName == null || quoteFromRealName.isBlank()) {
+                quoteFromRealName = quoteProfile.realName();
+            }
+            if (quoteFromAvatarUrl == null || quoteFromAvatarUrl.isBlank()) {
+                quoteFromAvatarUrl = quoteProfile.avatarUrl();
+            }
+        }
+        return MessageQuoteVO.builder()
+                .messageId(quote.getMessageId())
+                .from(quote.getFrom())
+                .formName(quoteFromRealName)
+                .fromName(quoteFromRealName)
+                .fromRealName(quoteFromRealName)
+                .fromAvatarUrl(quoteFromAvatarUrl)
+                .content(quote.getContent())
+                .build();
+    }
+
+    private UserProfile resolveUserProfile(String account) {
+        if (account == null || account.isBlank()) {
+            return new UserProfile(null, null);
+        }
+        var user = userRepository.findByAccount(account);
+        if (user == null) {
+            return new UserProfile(account, null);
+        }
+        String realName = user.getRealName();
+        if (realName == null || realName.isBlank()) {
+            realName = account;
+        }
+        return new UserProfile(realName, user.getAvatarUrl());
+    }
+
+    private record UserProfile(String realName, String avatarUrl) {
     }
 }

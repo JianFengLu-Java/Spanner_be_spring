@@ -56,4 +56,10 @@ public class PrivateMessageEntity {
 
     @Column(name = "delivery_status", nullable = false, length = 32)
     private String deliveryStatus;
+
+    @Column(name = "recalled", nullable = false)
+    private Boolean recalled = false;
+
+    @Column(name = "recalled_at")
+    private LocalDateTime recalledAt;
 }

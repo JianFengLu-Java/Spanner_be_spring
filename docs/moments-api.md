@@ -269,6 +269,38 @@ Host: localhost:8080
 - 将 `data.url` 写入动态 `images[]` 字段即可。
 - `data.objectName` 用于后续排障或二次处理（如缩略图、删除）。
 
+## 11. 动态系统通知（点赞/评论/回复）
+- 通道: `/user/queue/messages`
+- 消息来源: `from = SYSTEM`
+- 触发时机: 事务提交成功后（`AFTER_COMMIT`）
+- 触发规则:
+- 点赞动态（`POST /moments/{momentId}/likes`）成功后，通知动态作者
+- 一级评论（`POST /moments/{momentId}/comments` 且 `parentCommentId = null`）成功后，通知动态作者
+- 二级回复（`POST /moments/{momentId}/comments` 且 `parentCommentId != null`）成功后，通知被回复评论的作者
+- 过滤规则:
+- 不给自己发送系统通知（例如给自己的动态点赞/评论）
+- 点赞接口幂等，重复点赞不会重复通知
+
+系统通知消息示例（下行体，和私聊消息同结构）:
+```json
+{
+  "messageId": "d8b7a0f8-5f95-4b6f-9f5f-5312ec38f118",
+  "from": "SYSTEM",
+  "to": "10001",
+  "content": "{\"notificationType\":\"MOMENT_INTERACTION\",\"interactionType\":\"LIKE\",\"momentId\":\"m_1739358000000_ab12cd34\",\"momentTitle\":\"今日份打卡\",\"operatorAccount\":\"10002\",\"operatorName\":\"李四\",\"operatorAvatarUrl\":\"https://cdn.example.com/avatar-10002.png\",\"commentText\":null,\"text\":\"李四 赞了你的动态《今日份打卡》\"}",
+  "clientMessageId": null,
+  "sentAt": "2026-02-23T13:10:22.145"
+}
+```
+
+`content` JSON 字段说明:
+- `notificationType`: 固定 `MOMENT_INTERACTION`
+- `interactionType`: `LIKE | COMMENT | REPLY`
+- `momentId` / `momentTitle`: 目标动态信息
+- `operatorAccount` / `operatorName` / `operatorAvatarUrl`: 触发用户信息（包含头像 URL）
+- `commentText`: 评论/回复内容摘要（点赞场景为 `null`）
+- `text`: 可直接展示的人类可读文案
+
 ## 错误码
 - `400` + `MOMENT_INVALID_PARAM`: 参数非法
 - `401` + `UNAUTHORIZED`: 未登录或 token 无效

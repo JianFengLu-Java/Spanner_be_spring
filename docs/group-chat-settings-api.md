@@ -46,6 +46,9 @@
 - `keyword` 按账号/昵称模糊匹配
 - `role` 可选：`OWNER | ADMIN | MEMBER`
 - 返回分页字段：`records/page/size/total/totalPages/hasMore`
+- `records/members` 每个成员对象新增：`isVip`（`Boolean`）
+- 额外返回：`groupMemberProfileMap`（以账号为 key 的成员资料映射）
+  - `groupMemberProfileMap.{account}.isVip`：是否 VIP（`Boolean`）
 
 ### 2.3 更新我的群设置
 - `PUT /groups/{groupNo}/settings/my`
@@ -131,6 +134,7 @@
 ### 3.1 群成员预览
 - `GET /groups/{groupNo}/members/preview?size=9`
 - `size` 默认 `9`，最大 `18`
+- 每个成员对象新增：`isVip`（`Boolean`）
 
 ### 3.2 批量邀请成员
 - `POST /groups/{groupNo}/members/batch-invite`

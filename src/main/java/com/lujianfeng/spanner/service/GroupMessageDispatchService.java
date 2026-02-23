@@ -5,6 +5,7 @@ import com.lujianfeng.spanner.entity.group.ChatGroupMemberEntity;
 import com.lujianfeng.spanner.entity.message.GroupMessageEntity;
 import com.lujianfeng.spanner.repository.ChatGroupMemberRepository;
 import com.lujianfeng.spanner.repository.GroupMessageRepository;
+import com.lujianfeng.spanner.repository.UserRepository;
 import com.lujianfeng.spanner.vo.message.GroupMessageAckVO;
 import com.lujianfeng.spanner.vo.message.GroupMessageVO;
 import com.lujianfeng.spanner.vo.message.MessageQuoteVO;
@@ -22,15 +23,18 @@ public class GroupMessageDispatchService {
     private final ChatGroupService chatGroupService;
     private final ChatGroupMemberRepository chatGroupMemberRepository;
     private final GroupMessageRepository groupMessageRepository;
+    private final UserRepository userRepository;
 
     public GroupMessageDispatchService(SimpMessagingTemplate messagingTemplate,
                                        ChatGroupService chatGroupService,
                                        ChatGroupMemberRepository chatGroupMemberRepository,
-                                       GroupMessageRepository groupMessageRepository) {
+                                       GroupMessageRepository groupMessageRepository,
+                                       UserRepository userRepository) {
         this.messagingTemplate = messagingTemplate;
         this.chatGroupService = chatGroupService;
         this.chatGroupMemberRepository = chatGroupMemberRepository;
         this.groupMessageRepository = groupMessageRepository;
+        this.userRepository = userRepository;
     }
 
     public GroupMessageAckVO dispatchGroupMessage(String from,
@@ -50,14 +54,22 @@ public class GroupMessageDispatchService {
 
         String messageId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
+        UserProfile fromProfile = resolveUserProfile(from);
+        MessageQuoteVO normalizedQuote = enrichQuote(quote);
         GroupMessageVO messageVO = GroupMessageVO.builder()
                 .messageId(messageId)
                 .groupNo(group.getGroupNo())
                 .from(from)
+                .formName(fromProfile.realName())
+                .fromName(fromProfile.realName())
+                .fromRealName(fromProfile.realName())
+                .fromAvatarUrl(fromProfile.avatarUrl())
                 .content(content)
-                .quote(quote)
+                .quote(normalizedQuote)
                 .clientMessageId(clientMessageId)
                 .sentAt(now)
+                .recalled(false)
+                .recalledAt(null)
                 .build();
 
         persistMessage(messageVO);
@@ -86,6 +98,54 @@ public class GroupMessageDispatchService {
         entity.setQuotedContent(messageVO.getQuote() == null ? null : messageVO.getQuote().getContent());
         entity.setClientMessageId(messageVO.getClientMessageId());
         entity.setSentAt(messageVO.getSentAt() == null ? LocalDateTime.now() : messageVO.getSentAt());
+        entity.setRecalled(Boolean.TRUE.equals(messageVO.getRecalled()));
+        entity.setRecalledAt(messageVO.getRecalledAt());
         groupMessageRepository.save(entity);
+    }
+
+    private MessageQuoteVO enrichQuote(MessageQuoteVO quote) {
+        if (quote == null) {
+            return null;
+        }
+        String quoteFromRealName = quote.getFromRealName();
+        String quoteFromAvatarUrl = quote.getFromAvatarUrl();
+        if (quote.getFrom() != null && !quote.getFrom().isBlank()
+                && ((quoteFromRealName == null || quoteFromRealName.isBlank())
+                || (quoteFromAvatarUrl == null || quoteFromAvatarUrl.isBlank()))) {
+            UserProfile quoteProfile = resolveUserProfile(quote.getFrom());
+            if (quoteFromRealName == null || quoteFromRealName.isBlank()) {
+                quoteFromRealName = quoteProfile.realName();
+            }
+            if (quoteFromAvatarUrl == null || quoteFromAvatarUrl.isBlank()) {
+                quoteFromAvatarUrl = quoteProfile.avatarUrl();
+            }
+        }
+        return MessageQuoteVO.builder()
+                .messageId(quote.getMessageId())
+                .from(quote.getFrom())
+                .formName(quoteFromRealName)
+                .fromName(quoteFromRealName)
+                .fromRealName(quoteFromRealName)
+                .fromAvatarUrl(quoteFromAvatarUrl)
+                .content(quote.getContent())
+                .build();
+    }
+
+    private UserProfile resolveUserProfile(String account) {
+        if (account == null || account.isBlank()) {
+            return new UserProfile(null, null);
+        }
+        var user = userRepository.findByAccount(account);
+        if (user == null) {
+            return new UserProfile(account, null);
+        }
+        String realName = user.getRealName();
+        if (realName == null || realName.isBlank()) {
+            realName = account;
+        }
+        return new UserProfile(realName, user.getAvatarUrl());
+    }
+
+    private record UserProfile(String realName, String avatarUrl) {
     }
 }

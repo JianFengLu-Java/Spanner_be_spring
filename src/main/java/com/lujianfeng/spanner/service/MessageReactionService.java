@@ -150,7 +150,7 @@ public class MessageReactionService {
 
         MessageReactionSnapshotVO snapshot = buildSnapshot(target, request.getChatId());
         persistRequestSnapshot(requestId, operatorAccount, target);
-        publishUpdatedEvent(target, snapshot, request.getChatId());
+        publishUpdatedEvent(target, snapshot);
         maybeSendReactionSystemNotify(target, operatorAccount, toggledOn, emoji, imageUrl, reactionKey);
         return snapshot;
     }
@@ -212,19 +212,31 @@ public class MessageReactionService {
                 .build();
     }
 
-    private void publishUpdatedEvent(MessageTarget target, MessageReactionSnapshotVO snapshot, Long chatId) {
-        MessageReactionUpdatedEventVO event = MessageReactionUpdatedEventVO.builder()
-                .eventType(EVENT_TYPE)
-                .chatId(chatId)
-                .messageId(target.messageId())
-                .serverMessageId(target.messageId())
-                .updatedAt(Instant.now())
-                .reactions(snapshot.getReactions())
-                .build();
+    private void publishUpdatedEvent(MessageTarget target, MessageReactionSnapshotVO snapshot) {
         Set<String> recipients = resolveRecipients(target);
         for (String recipient : recipients) {
+            MessageReactionUpdatedEventVO event = MessageReactionUpdatedEventVO.builder()
+                    .eventType(EVENT_TYPE)
+                    .chatId(resolveEventChatId(target, recipient, snapshot.getChatId()))
+                    .messageId(target.messageId())
+                    .serverMessageId(target.messageId())
+                    .updatedAt(Instant.now())
+                    .reactions(snapshot.getReactions())
+                    .build();
             messagingTemplate.convertAndSendToUser(recipient, EVENT_DESTINATION, event);
         }
+    }
+
+    private Long resolveEventChatId(MessageTarget target, String recipient, Long fallbackChatId) {
+        if (!TYPE_PRIVATE.equals(target.messageType())) {
+            return fallbackChatId;
+        }
+        if (recipient == null || recipient.isBlank()) {
+            return fallbackChatId;
+        }
+        String peerAccount = recipient.equals(target.fromAccount()) ? target.toAccount() : target.fromAccount();
+        Long peerChatId = parsePositiveLong(trim(peerAccount));
+        return peerChatId == null ? fallbackChatId : peerChatId;
     }
 
     private void maybeSendReactionSystemNotify(MessageTarget target,

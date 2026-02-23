@@ -28,6 +28,8 @@ Authorization: Bearer eyJhbGciOi...
       {
         "messageId": "f2f4324e-9d4a-4c58-a4df-3f908f3520d2",
         "from": "1000001",
+        "fromRealName": "张三",
+        "fromAvatarUrl": "https://cdn.example.com/avatar-1000001.png",
         "to": "1000002",
         "content": "你好，在吗？",
         "clientMessageId": "c_17370100001",

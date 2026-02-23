@@ -21,6 +21,8 @@
 {
   "messageId": "msg_123",
   "from": "10001",
+  "fromName": "张三",
+  "fromRealName": "张三",
   "content": "<p>被引用消息内容</p>"
 }
 ```
@@ -28,7 +30,8 @@
 字段说明：
 1. `messageId`：被引用消息 ID，必填（发送时）
 2. `from`：被引用消息发送方账号，可选
-3. `content`：被引用消息内容快照，可选
+3. `fromRealName`：被引用消息发送方展示名，可选（后端会尽量补全）
+4. `content`：被引用消息内容快照，可选
 
 ---
 
@@ -83,11 +86,15 @@ STOMP Endpoint：
 {
   "messageId": "msg_new_001",
   "from": "10001",
+  "fromName": "用户A",
+  "fromRealName": "用户A",
   "to": "10002",
   "content": "<p>这是新消息</p>",
   "quote": {
     "messageId": "msg_old_001",
     "from": "10002",
+    "fromName": "用户B",
+    "fromRealName": "用户B",
     "content": "<p>上一条消息</p>"
   },
   "clientMessageId": "c_001",
@@ -102,10 +109,14 @@ STOMP Endpoint：
   "messageId": "msg_new_101",
   "groupNo": "G10001",
   "from": "10001",
+  "fromName": "用户A",
+  "fromRealName": "用户A",
   "content": "<p>这是群消息</p>",
   "quote": {
     "messageId": "msg_old_101",
     "from": "10003",
+    "fromName": "用户C",
+    "fromRealName": "用户C",
     "content": "<p>群里的一条历史消息</p>"
   },
   "clientMessageId": "cg_001",
@@ -123,6 +134,11 @@ STOMP Endpoint：
 3. `GET /groups/{groupNo}/messages/history`
 
 消息对象中的 `quote` 结构与 `MessageQuote` 一致。
+
+姓名字段约定：
+1. 后端统一返回 `fromRealName`
+2. 为兼容已有前端解析链路，同时返回 `fromName`（与 `fromRealName` 同值）
+3. `quote` 中同样返回 `fromRealName` 与 `fromName`
 
 ---
 
