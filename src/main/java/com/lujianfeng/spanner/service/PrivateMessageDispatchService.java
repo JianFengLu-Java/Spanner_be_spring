@@ -22,6 +22,7 @@ import java.util.UUID;
 @Service
 public class PrivateMessageDispatchService {
     private static final Logger log = LoggerFactory.getLogger(PrivateMessageDispatchService.class);
+    private static final String SYSTEM_ACCOUNT = "SYSTEM";
 
     private final SimpMessagingTemplate messagingTemplate;
     private final OfflineMessageService offlineMessageService;
@@ -77,7 +78,20 @@ public class PrivateMessageDispatchService {
 
         boolean receiverOnline = isUserOnline(to);
         String ackStatus;
-        if (receiverOnline) {
+        if (isSystemSender(from)) {
+            // 系统通知优先尝试实时投递，避免在线态误判导致前端收不到即时通知。
+            messagingTemplate.convertAndSendToUser(to, "/queue/messages", messageVO);
+            if (receiverOnline) {
+                ackStatus = "SENT";
+            } else {
+                boolean stored = offlineMessageService.storePrivateMessage(to, messageVO);
+                ackStatus = stored ? "OFFLINE_STORED" : "OFFLINE_STORE_FAILED";
+                if (!stored) {
+                    log.error("Failed to store private message for offline user, messageId={}, from={}, to={}",
+                            messageId, from, to);
+                }
+            }
+        } else if (receiverOnline) {
             messagingTemplate.convertAndSendToUser(to, "/queue/messages", messageVO);
             ackStatus = "SENT";
         } else {
@@ -177,5 +191,9 @@ public class PrivateMessageDispatchService {
     }
 
     private record UserProfile(String realName, String avatarUrl) {
+    }
+
+    private boolean isSystemSender(String account) {
+        return account != null && SYSTEM_ACCOUNT.equalsIgnoreCase(account.trim());
     }
 }

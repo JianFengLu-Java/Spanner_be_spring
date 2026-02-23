@@ -54,7 +54,7 @@ public class GroupMessageEntity {
     @Column(name = "sent_at", nullable = false)
     private LocalDateTime sentAt;
 
-    @Column(name = "recalled", nullable = false)
+    @Column(name = "recalled")
     private Boolean recalled = false;
 
     @Column(name = "recalled_at")
